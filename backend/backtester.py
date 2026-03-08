@@ -218,20 +218,22 @@ def run_backtest(results: list[dict]) -> dict:
                 "samples": len(h_returns),
             })
 
-        # Compute half-life: first day where avg_return drops below 50% of peak
+        # Compute half-life: first day AFTER peak where avg_return drops below 70% of peak
         peak_ret = max((d["avg_return"] for d in decay_curve), default=0)
+        peak_day = next((d["day"] for d in decay_curve if d["avg_return"] == peak_ret), 1)
         half_life = None
         if peak_ret > 0:
             for d in decay_curve:
-                if d["avg_return"] < peak_ret * 0.5 and d["day"] > 1:
+                if d["day"] > peak_day and d["avg_return"] < peak_ret * 0.7:
                     half_life = d["day"]
                     break
 
+        max_day = max((d["day"] for d in decay_curve), default=20)
         decay = {
             "curve": decay_curve,
             "peak_return": peak_ret,
             "peak_horizon": next((d["horizon"] for d in decay_curve if d["avg_return"] == peak_ret), None),
-            "half_life_days": half_life,
+            "half_life_days": half_life if half_life else f">{max_day}",
         }
 
     return {
