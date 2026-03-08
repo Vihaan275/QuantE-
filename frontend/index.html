@@ -62,31 +62,41 @@
     .glass-panel { background: rgba(19, 26, 42, 0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
     .premium-shadow { box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.03); }
     .premium-shadow-lg { box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 8px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04); }
-    /* Motion blur during auto-scroll */
+    /* Motion blur during auto-scroll — smooth fade in/out */
     .scroll-blur-wrap { position: relative; overflow: hidden; }
     .scroll-blur-wrap::before,
     .scroll-blur-wrap::after {
       content: ''; position: absolute; left: 0; right: 0; height: 0; z-index: 10;
       pointer-events: none; opacity: 0;
-      transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), height 0.6s cubic-bezier(0.16,1,0.3,1);
+      transition: opacity 0.8s ease, height 0.8s ease;
     }
     .scroll-blur-wrap::before {
       top: 0;
-      background: linear-gradient(to bottom, rgba(12,16,24,0.9) 0%, rgba(12,16,24,0.4) 50%, transparent 100%);
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
+      background: linear-gradient(to bottom,
+        rgba(12,16,24,0.7) 0%,
+        rgba(12,16,24,0.45) 20%,
+        rgba(12,16,24,0.2) 50%,
+        rgba(12,16,24,0.05) 80%,
+        transparent 100%);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
     }
     .scroll-blur-wrap::after {
       bottom: 0;
-      background: linear-gradient(to top, rgba(12,16,24,0.9) 0%, rgba(12,16,24,0.4) 50%, transparent 100%);
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
+      background: linear-gradient(to top,
+        rgba(12,16,24,0.7) 0%,
+        rgba(12,16,24,0.45) 20%,
+        rgba(12,16,24,0.2) 50%,
+        rgba(12,16,24,0.05) 80%,
+        transparent 100%);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
     }
     .scroll-blur-active::before,
-    .scroll-blur-active::after { opacity: 1; height: 80px; }
+    .scroll-blur-active::after { opacity: 1; height: 100px; }
     .scroll-blur-active > div {
-      mask-image: linear-gradient(to bottom, transparent 0%, black 80px, black calc(100% - 80px), transparent 100%);
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 80px, black calc(100% - 80px), transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0%, black 100px, black calc(100% - 100px), transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 100px, black calc(100% - 100px), transparent 100%);
     }
   </style>
 </head>
@@ -386,6 +396,7 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo, simAccoun
                     eps_modifier: data.eps_modifier,
                     sub_scores: { ...subScoresRef.current },
                     bootstrap_cis: data.bootstrap_cis || {},
+                    transcript_text: transcript,
                   }));
                   break;
                 case 'attributions':
@@ -825,10 +836,11 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo, simAccoun
             // Calculate TP/SL from signal strength + confidence
             const absSignal = Math.abs(composite.composite_signal);
             const conf = composite.confidence || 0.5;
+            const isShort = composite.signal_label === 'SHORT';
             let baseTp, baseSl;
-            if (absSignal >= 0.5) { baseTp = 12; baseSl = 4; }
-            else if (absSignal >= 0.35) { baseTp = 8; baseSl = 5; }
-            else { baseTp = 5; baseSl = 5; }
+            if (absSignal >= 0.5) { baseTp = isShort ? 8 : 12; baseSl = 4; }
+            else if (absSignal >= 0.35) { baseTp = isShort ? 5 : 8; baseSl = 5; }
+            else { baseTp = isShort ? 3 : 5; baseSl = 5; }
             // Confidence scales: high conf → wider TP, tighter SL
             const calcTp = Math.round(baseTp * (0.8 + conf * 0.4) * 10) / 10;
             const calcSl = Math.round(baseSl * (1.2 - conf * 0.4) * 10) / 10;
@@ -1125,6 +1137,57 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo, simAccoun
                 </div>
               )}
 
+              {backtestResult.decay && backtestResult.decay.curve && (
+                <div className="rounded-xl overflow-hidden border border-emerald-700/30">
+                  <div className="bg-gradient-to-r from-emerald-900/30 to-slate-900/20 px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+                      <h4 className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Signal Decay</h4>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {backtestResult.decay.peak_horizon && (
+                        <span className="text-[10px] text-emerald-400/70 mono">Peak: {backtestResult.decay.peak_horizon}</span>
+                      )}
+                      {backtestResult.decay.half_life_days && (
+                        <span className="text-[10px] text-amber-400/70 mono">Half-life: {backtestResult.decay.half_life_days}d</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/40 p-3">
+                    <ResponsiveContainer width="100%" height={120}>
+                      <BarChart data={backtestResult.decay.curve} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+                        <XAxis dataKey="horizon" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={v => v + '%'} />
+                        <Tooltip
+                          contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }}
+                          labelStyle={{ color: '#94a3b8', fontWeight: 600 }}
+                          formatter={(v, name) => {
+                            if (name === 'avg_return') return [v + '%', 'Avg Return'];
+                            if (name === 'win_rate') return [(v * 100).toFixed(0) + '%', 'Win Rate'];
+                            return [v, name];
+                          }}
+                        />
+                        <Bar dataKey="avg_return" radius={[4, 4, 0, 0]}>
+                          {backtestResult.decay.curve.map((entry, idx) => (
+                            <Cell key={idx} fill={entry.avg_return >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.7} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[9px] text-slate-500">Direction-normalized returns by holding period</span>
+                      <div className="flex items-center gap-2">
+                        {backtestResult.decay.curve.slice(0, 4).map((d, i) => (
+                          <span key={i} className="text-[9px] mono text-slate-500">
+                            {d.horizon}: <span className={d.win_rate >= 0.6 ? 'text-green-400' : d.win_rate >= 0.5 ? 'text-yellow-400' : 'text-red-400'}>{(d.win_rate * 100).toFixed(0)}%</span> win
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {backtestResult.individual_results && (
                 <div>
                   <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Individual Signals</h4>
@@ -1150,6 +1213,83 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo, simAccoun
       </div>
     </div>
   );
+}
+
+// ===================== BASELINE KEYWORD SENTIMENT MODEL =====================
+
+function runBaselineModel(transcriptText) {
+  if (!transcriptText || transcriptText.trim().length === 0) return null;
+
+  const POSITIVE = [
+    'growth', 'growing', 'grew', 'beat', 'beats', 'record', 'strong', 'strength',
+    'increase', 'increased', 'increasing', 'exceeded', 'exceeding', 'upside',
+    'robust', 'favorable', 'improved', 'improving', 'improvement', 'accelerat',
+    'momentum', 'outperform', 'surpass', 'expand', 'expansion', 'tailwind',
+    'demand', 'positive', 'profit', 'profitable', 'opportunity', 'confident',
+    'optimistic', 'higher', 'gain', 'gains', 'success', 'successful',
+    'innovation', 'innovative', 'raised', 'upgrade', 'upgraded', 'above',
+  ];
+  const NEGATIVE = [
+    'miss', 'missed', 'decline', 'declined', 'declining', 'loss', 'losses',
+    'weak', 'weakness', 'decrease', 'decreased', 'disappoint', 'disappointing',
+    'downside', 'pressure', 'headwind', 'challenging', 'challenge', 'slowdown',
+    'slowing', 'uncertainty', 'cautious', 'negative', 'contraction', 'deteriorat',
+    'soften', 'softness', 'underperform', 'worse', 'worsening', 'risk', 'risks',
+    'concern', 'concerns', 'cut', 'cuts', 'lower', 'below', 'difficult',
+    'recession', 'downturn', 'layoff', 'restructur', 'impair', 'write-down',
+  ];
+
+  // Split into sentences
+  const sentences = transcriptText.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  if (sentences.length === 0) return null;
+
+  // Build regex patterns with word boundaries for accurate matching
+  // Stems (ending without a full word) use prefix matching; full words use \b boundaries
+  const buildPattern = (words) => words.map(w => /[a-z]$/.test(w) && !w.endsWith('e') && w.length <= 6 ? w : `\\b${w}`).join('|');
+  const posRe = new RegExp(buildPattern(POSITIVE), 'gi');
+  const negRe = new RegExp(buildPattern(NEGATIVE), 'gi');
+
+  // Score each sentence
+  let totalPos = 0, totalNeg = 0;
+  const sentenceScores = sentences.map(sentence => {
+    const posMatches = (sentence.match(posRe) || []).length;
+    const negMatches = (sentence.match(negRe) || []).length;
+    totalPos += posMatches;
+    totalNeg += negMatches;
+    const total = posMatches + negMatches;
+    return total > 0 ? (posMatches - negMatches) / total : 0;
+  });
+
+  // Overall sentiment
+  const totalWords = totalPos + totalNeg || 1;
+  const rawScore = (totalPos - totalNeg) / totalWords;
+  const composite = Math.max(-1, Math.min(1, rawScore * 1.8));
+  const label = composite >= 0.2 ? 'LONG' : composite <= -0.2 ? 'SHORT' : 'NEUTRAL';
+  const confidence = Math.min(0.85, Math.abs(composite) * 0.6 + 0.15);
+
+  // Build sub_scores matching advanced model format
+  // Split transcript roughly into halves for "guidance" vs "momentum"
+  const halfIdx = Math.floor(sentences.length / 2);
+  const firstHalfScores = sentenceScores.slice(0, halfIdx);
+  const secondHalfScores = sentenceScores.slice(halfIdx);
+
+  const avgFirst = firstHalfScores.length > 0 ? firstHalfScores.reduce((a, b) => a + b, 0) / firstHalfScores.length : 0;
+  const avgSecond = secondHalfScores.length > 0 ? secondHalfScores.reduce((a, b) => a + b, 0) / secondHalfScores.length : 0;
+  const avgAll = sentenceScores.reduce((a, b) => a + b, 0) / sentenceScores.length;
+
+  return {
+    composite_signal: Math.round(composite * 100) / 100,
+    signal_label: label,
+    confidence: Math.round(confidence * 100) / 100,
+    positive_count: totalPos,
+    negative_count: totalNeg,
+    total_sentences: sentences.length,
+    sub_scores: {
+      guidance_hedge: { score: Math.max(-1, Math.min(1, avgFirst * 2.5)), explanation: `Keyword sentiment in prepared remarks: ${totalPos} positive, ${totalNeg} negative keywords` },
+      analyst_pressure: { score: Math.max(-1, Math.min(1, (avgSecond - avgFirst) * 2)), explanation: 'Tone shift between first and second half of transcript' },
+      language_momentum: { score: Math.max(-1, Math.min(1, avgAll * 2.5)), explanation: `Overall keyword polarity: ${((totalPos / totalWords) * 100).toFixed(0)}% positive` },
+    },
+  };
 }
 
 // ===================== PAGE 2: REPLAY SIMULATOR =====================
@@ -1192,6 +1332,26 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
   const timerRef = useRef(null);
+
+  // Comparative analysis state
+  const [compareMode, setCompareMode] = useState(false);
+  const [baselineSignal, setBaselineSignal] = useState(null);
+  const chartContainerRef2 = useRef(null);
+  const chartRef2 = useRef(null);
+  const seriesRef2 = useRef(null);
+  // Baseline trade params (derived from baseline signal)
+  const [blDirection, setBlDirection] = useState('LONG');
+  const [blStopPct, setBlStopPct] = useState(5);
+  const [blTpPct, setBlTpPct] = useState(10);
+  // Baseline P&L
+  const [blPnl, setBlPnl] = useState(0);
+  const [blPnlPct, setBlPnlPct] = useState(0);
+  const [blMaxFav, setBlMaxFav] = useState(0);
+  const [blMaxAdv, setBlMaxAdv] = useState(0);
+  const [blStatus, setBlStatus] = useState('IDLE');
+  const [blExitPrice, setBlExitPrice] = useState(null);
+  const [blExitReason, setBlExitReason] = useState('');
+  const [blExitIdx, setBlExitIdx] = useState(null);
 
   // Load from signal state
   const loadFromSignal = useCallback(() => {
@@ -1253,14 +1413,15 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
   useEffect(() => {
     if (!chartContainerRef.current || typeof LightweightCharts === 'undefined') return;
 
-    const chart = LightweightCharts.createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 420,
+    const container = chartContainerRef.current;
+    const chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: container.clientHeight || 420,
       layout: { background: { color: '#0c1018' }, textColor: '#64748b' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#334155' },
-      timeScale: { borderColor: '#334155', timeVisible: interval === '1h' },
+      timeScale: { borderColor: '#334155', timeVisible: interval === '1h', barSpacing: 20, rightOffset: 5 },
     });
 
     const series = chart.addCandlestickSeries({
@@ -1274,10 +1435,15 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
 
     const handleResize = () => {
       if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        chart.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight || 420,
+        });
       }
     };
     window.addEventListener('resize', handleResize);
+    // Initial size adjustment after layout settles
+    requestAnimationFrame(handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -1286,6 +1452,105 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
       seriesRef.current = null;
     };
   }, []);
+
+  // Initialize baseline chart when compare mode activates
+  useEffect(() => {
+    if (!compareMode || !chartContainerRef2.current || typeof LightweightCharts === 'undefined') return;
+
+    const container = chartContainerRef2.current;
+    const chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: container.clientHeight || 420,
+      layout: { background: { color: '#0c1018' }, textColor: '#64748b' },
+      grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#334155' },
+      timeScale: { borderColor: '#334155', timeVisible: interval === '1h', barSpacing: 20, rightOffset: 5 },
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    });
+
+    chartRef2.current = chart;
+    seriesRef2.current = series;
+
+    const handleResize = () => {
+      if (chartContainerRef2.current) {
+        chart.applyOptions({
+          width: chartContainerRef2.current.clientWidth,
+          height: chartContainerRef2.current.clientHeight || 420,
+        });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    requestAnimationFrame(handleResize);
+
+    // If we already have candle data, populate the baseline chart
+    if (candles.length > 0 && replayActive) {
+      const contextCandles = candles.slice(0, currentIdx + 1).map(c => ({
+        time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+      }));
+      series.setData(contextCandles);
+
+      const ep = parseFloat(entryPrice);
+      if (ep > 0) {
+        const blDir = blDirection;
+        series.setMarkers([{
+          time: candles[entryIdx].time,
+          position: 'belowBar', color: '#f59e0b', shape: 'arrowUp',
+          text: `ENTRY @ $${ep.toFixed(2)}`,
+        }]);
+        series.createPriceLine({
+          price: blDir === 'LONG' ? ep * (1 - blStopPct / 100) : ep * (1 + blStopPct / 100),
+          color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: 'STOP',
+        });
+        series.createPriceLine({
+          price: blDir === 'LONG' ? ep * (1 + blTpPct / 100) : ep * (1 - blTpPct / 100),
+          color: '#10b981', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: 'TARGET',
+        });
+      }
+      chart.timeScale().scrollToRealTime();
+    }
+
+    // Resize primary chart too since it now shares width
+    if (chartRef.current && chartContainerRef.current) {
+      chartRef.current.applyOptions({
+        width: chartContainerRef.current.clientWidth,
+        height: chartContainerRef.current.clientHeight || 420,
+      });
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+      chartRef2.current = null;
+      seriesRef2.current = null;
+    };
+  }, [compareMode]);
+
+  // Resize both charts when compareMode toggles
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (chartRef.current && chartContainerRef.current) {
+        chartRef.current.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight || 420,
+        });
+      }
+      if (chartRef2.current && chartContainerRef2.current) {
+        chartRef2.current.applyOptions({
+          width: chartContainerRef2.current.clientWidth,
+          height: chartContainerRef2.current.clientHeight || 420,
+        });
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [compareMode]);
 
   // Start replay
   const startReplay = async () => {
@@ -1367,7 +1632,7 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
           });
         }
 
-        chartRef.current.timeScale().fitContent();
+        chartRef.current.timeScale().scrollToRealTime();
       }
 
       // Calculate initial P&L
@@ -1381,30 +1646,71 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
       setPnl(initPnl);
       setPnlPct(initPnlPct);
 
+      // Set up baseline chart in compare mode
+      if (compareMode && seriesRef2.current) {
+        const contextCandles = data.candles.slice(0, eIdx + 1).map(c => ({
+          time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+        }));
+        seriesRef2.current.setData(contextCandles);
+        seriesRef2.current.setMarkers([{
+          time: data.candles[eIdx].time,
+          position: 'belowBar', color: '#f59e0b', shape: 'arrowUp',
+          text: `ENTRY @ $${actualEntry.toFixed(2)}`,
+        }]);
+        const blDir = blDirection;
+        seriesRef2.current.createPriceLine({
+          price: blDir === 'LONG' ? actualEntry * (1 - blStopPct / 100) : actualEntry * (1 + blStopPct / 100),
+          color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: 'STOP',
+        });
+        seriesRef2.current.createPriceLine({
+          price: blDir === 'LONG' ? actualEntry * (1 + blTpPct / 100) : actualEntry * (1 - blTpPct / 100),
+          color: '#10b981', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: 'TARGET',
+        });
+        chartRef2.current.timeScale().scrollToRealTime();
+
+        // Reset baseline P&L
+        setBlStatus('OPEN');
+        setBlExitPrice(null); setBlExitReason(''); setBlExitIdx(null);
+        setBlMaxFav(0); setBlMaxAdv(0);
+        const blInitPnl = blDir === 'LONG'
+          ? (initClose - actualEntry) * Math.max(1, Math.floor(positionSize / actualEntry))
+          : (actualEntry - initClose) * Math.max(1, Math.floor(positionSize / actualEntry));
+        const blInitPnlPct = blDir === 'LONG'
+          ? ((initClose - actualEntry) / actualEntry) * 100
+          : ((actualEntry - initClose) / actualEntry) * 100;
+        setBlPnl(blInitPnl);
+        setBlPnlPct(blInitPnlPct);
+      }
+
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
   // Step forward one candle
   const stepForward = useCallback(() => {
-    if (!replayActive || status !== 'OPEN') return;
+    // In compare mode, keep stepping if either model's trade is still open
+    const advOpen = status === 'OPEN';
+    const blOpen = compareMode ? blStatus === 'OPEN' : false;
+    if (!replayActive || (!advOpen && !blOpen)) return;
+
     setCurrentIdx(prev => {
       const nextIdx = prev + 1;
-      if (nextIdx >= candles.length) {
-        setStatus('EXPIRED');
-        setExitPrice(candles[candles.length - 1].close);
-        setExitReason('Replay window expired');
-        setExitIdx(candles.length - 1);
-        setPlaying(false);
-        return prev;
-      }
-
-      // Check max candles from entry
-      if (nextIdx - entryIdx > replayWindow) {
-        setStatus('EXPIRED');
-        setExitPrice(candles[nextIdx - 1].close);
-        setExitReason('Replay window expired');
-        setExitIdx(nextIdx - 1);
+      if (nextIdx >= candles.length || nextIdx - entryIdx > replayWindow) {
+        // Expire both if still open
+        if (advOpen) {
+          setStatus('EXPIRED');
+          setExitPrice(candles[Math.min(nextIdx, candles.length) - 1].close);
+          setExitReason('Replay window expired');
+          setExitIdx(Math.min(nextIdx, candles.length) - 1);
+        }
+        if (blOpen) {
+          setBlStatus('EXPIRED');
+          setBlExitPrice(candles[Math.min(nextIdx, candles.length) - 1].close);
+          setBlExitReason('Replay window expired');
+          setBlExitIdx(Math.min(nextIdx, candles.length) - 1);
+        }
         setPlaying(false);
         return prev;
       }
@@ -1413,77 +1719,78 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
       const ep = parseFloat(entryPrice);
       const q = Math.max(1, Math.floor(positionSize / ep));
 
-      // Update chart
+      // Update advanced chart
       if (seriesRef.current) {
         seriesRef.current.update({
-          time: candle.time,
-          open: candle.open, high: candle.high, low: candle.low, close: candle.close,
+          time: candle.time, open: candle.open, high: candle.high, low: candle.low, close: candle.close,
+        });
+      }
+
+      // Update baseline chart
+      if (compareMode && seriesRef2.current) {
+        seriesRef2.current.update({
+          time: candle.time, open: candle.open, high: candle.high, low: candle.low, close: candle.close,
         });
       }
 
       setCurrentPrice(candle.close);
 
-      // Calculate P&L
-      const newPnl = direction === 'LONG'
-        ? (candle.close - ep) * q
-        : (ep - candle.close) * q;
-      const newPnlPct = direction === 'LONG'
-        ? ((candle.close - ep) / ep) * 100
-        : ((ep - candle.close) / ep) * 100;
+      // --- Advanced model P&L ---
+      if (advOpen) {
+        const newPnl = direction === 'LONG' ? (candle.close - ep) * q : (ep - candle.close) * q;
+        const newPnlPct = direction === 'LONG' ? ((candle.close - ep) / ep) * 100 : ((ep - candle.close) / ep) * 100;
+        setPnl(newPnl);
+        setPnlPct(newPnlPct);
+        setMaxFav(prev => Math.max(prev, newPnl));
+        setMaxAdv(prev => Math.min(prev, newPnl));
 
-      setPnl(newPnl);
-      setPnlPct(newPnlPct);
-      setMaxFav(prev => Math.max(prev, newPnl));
-      setMaxAdv(prev => Math.min(prev, newPnl));
-
-      // Check stop loss (at candle close)
-      const stopP = direction === 'LONG' ? ep * (1 - stopLossPct / 100) : ep * (1 + stopLossPct / 100);
-      const targetP = direction === 'LONG' ? ep * (1 + takeProfitPct / 100) : ep * (1 - takeProfitPct / 100);
-
-      if (direction === 'LONG') {
-        if (candle.close <= stopP) {
-          setStatus('STOPPED_OUT');
-          setExitPrice(candle.close);
-          setExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`);
-          setExitIdx(nextIdx);
-          setPlaying(false);
-        } else if (candle.close >= targetP) {
-          setStatus('TARGET_HIT');
-          setExitPrice(candle.close);
-          setExitReason(`Take profit hit at $${candle.close.toFixed(2)}`);
-          setExitIdx(nextIdx);
-          setPlaying(false);
+        const stopP = direction === 'LONG' ? ep * (1 - stopLossPct / 100) : ep * (1 + stopLossPct / 100);
+        const targetP = direction === 'LONG' ? ep * (1 + takeProfitPct / 100) : ep * (1 - takeProfitPct / 100);
+        if (direction === 'LONG') {
+          if (candle.close <= stopP) { setStatus('STOPPED_OUT'); setExitPrice(candle.close); setExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`); setExitIdx(nextIdx); }
+          else if (candle.close >= targetP) { setStatus('TARGET_HIT'); setExitPrice(candle.close); setExitReason(`Take profit hit at $${candle.close.toFixed(2)}`); setExitIdx(nextIdx); }
+        } else {
+          if (candle.close >= stopP) { setStatus('STOPPED_OUT'); setExitPrice(candle.close); setExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`); setExitIdx(nextIdx); }
+          else if (candle.close <= targetP) { setStatus('TARGET_HIT'); setExitPrice(candle.close); setExitReason(`Take profit hit at $${candle.close.toFixed(2)}`); setExitIdx(nextIdx); }
         }
-      } else {
-        if (candle.close >= stopP) {
-          setStatus('STOPPED_OUT');
-          setExitPrice(candle.close);
-          setExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`);
-          setExitIdx(nextIdx);
-          setPlaying(false);
-        } else if (candle.close <= targetP) {
-          setStatus('TARGET_HIT');
-          setExitPrice(candle.close);
-          setExitReason(`Take profit hit at $${candle.close.toFixed(2)}`);
-          setExitIdx(nextIdx);
-          setPlaying(false);
+      }
+
+      // --- Baseline model P&L ---
+      if (compareMode && blOpen) {
+        const blQ = Math.max(1, Math.floor(positionSize / ep));
+        const bPnl = blDirection === 'LONG' ? (candle.close - ep) * blQ : (ep - candle.close) * blQ;
+        const bPnlPct = blDirection === 'LONG' ? ((candle.close - ep) / ep) * 100 : ((ep - candle.close) / ep) * 100;
+        setBlPnl(bPnl);
+        setBlPnlPct(bPnlPct);
+        setBlMaxFav(prev => Math.max(prev, bPnl));
+        setBlMaxAdv(prev => Math.min(prev, bPnl));
+
+        const blStopP = blDirection === 'LONG' ? ep * (1 - blStopPct / 100) : ep * (1 + blStopPct / 100);
+        const blTargetP = blDirection === 'LONG' ? ep * (1 + blTpPct / 100) : ep * (1 - blTpPct / 100);
+        if (blDirection === 'LONG') {
+          if (candle.close <= blStopP) { setBlStatus('STOPPED_OUT'); setBlExitPrice(candle.close); setBlExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`); setBlExitIdx(nextIdx); }
+          else if (candle.close >= blTargetP) { setBlStatus('TARGET_HIT'); setBlExitPrice(candle.close); setBlExitReason(`Take profit hit at $${candle.close.toFixed(2)}`); setBlExitIdx(nextIdx); }
+        } else {
+          if (candle.close >= blStopP) { setBlStatus('STOPPED_OUT'); setBlExitPrice(candle.close); setBlExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`); setBlExitIdx(nextIdx); }
+          else if (candle.close <= blTargetP) { setBlStatus('TARGET_HIT'); setBlExitPrice(candle.close); setBlExitReason(`Take profit hit at $${candle.close.toFixed(2)}`); setBlExitIdx(nextIdx); }
         }
       }
 
       return nextIdx;
     });
-  }, [replayActive, status, candles, entryIdx, entryPrice, direction, positionSize, stopLossPct, takeProfitPct, replayWindow]);
+  }, [replayActive, status, blStatus, candles, entryIdx, entryPrice, direction, positionSize, stopLossPct, takeProfitPct, replayWindow, compareMode, blDirection, blStopPct, blTpPct]);
 
-  // Play/pause timer
+  // Play/pause timer — keep playing if either model is still open
   useEffect(() => {
-    if (playing && status === 'OPEN') {
+    const anyOpen = status === 'OPEN' || (compareMode && blStatus === 'OPEN');
+    if (playing && anyOpen) {
       const ms = Math.max(100, 1000 / speed);
       timerRef.current = window.setInterval(stepForward, ms);
     } else {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [playing, speed, stepForward, status]);
+  }, [playing, speed, stepForward, status, blStatus, compareMode]);
 
   // Page Visibility API — pause when tab hidden
   useEffect(() => {
@@ -1511,6 +1818,31 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
     }
   }, [status, pnl, setSimAccount]);
 
+  // Activate comparative analysis
+  const activateCompare = () => {
+    const transcriptText = signalState?.transcript_text;
+    if (!transcriptText) {
+      setError('No transcript loaded. Run signal analysis first, then load the signal.');
+      return;
+    }
+    const bl = runBaselineModel(transcriptText);
+    if (!bl) {
+      setError('Failed to run baseline model on transcript.');
+      return;
+    }
+    setBaselineSignal(bl);
+    setBlDirection(bl.signal_label === 'SHORT' ? 'SHORT' : 'LONG');
+    // Baseline uses fixed 5% SL, 10% TP (naive approach)
+    setBlStopPct(5);
+    setBlTpPct(10);
+    // Reset baseline P&L state so it's ready for replay
+    setBlPnl(0); setBlPnlPct(0); setBlMaxFav(0); setBlMaxAdv(0);
+    setBlExitPrice(null); setBlExitReason(''); setBlExitIdx(null);
+    // If replay is already running, set baseline to OPEN so it participates
+    setBlStatus(replayActive && status === 'OPEN' ? 'OPEN' : 'IDLE');
+    setCompareMode(true);
+  };
+
   // Reset replay
   const resetReplay = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -1537,14 +1869,72 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
       setPnlPct(direction === 'LONG'
         ? ((candles[entryIdx].close - ep) / ep) * 100
         : ((ep - candles[entryIdx].close) / ep) * 100);
-      if (chartRef.current) chartRef.current.timeScale().fitContent();
+      // Restore entry marker and price lines
+      seriesRef.current.setMarkers([{
+        time: candles[entryIdx].time,
+        position: 'belowBar', color: '#06b6d4', shape: 'arrowUp',
+        text: `ENTRY @ $${ep.toFixed(2)}`,
+      }]);
+      seriesRef.current.createPriceLine({
+        price: direction === 'LONG' ? ep * (1 - stopLossPct / 100) : ep * (1 + stopLossPct / 100),
+        color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true, title: 'STOP',
+      });
+      seriesRef.current.createPriceLine({
+        price: direction === 'LONG' ? ep * (1 + takeProfitPct / 100) : ep * (1 - takeProfitPct / 100),
+        color: '#10b981', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true, title: 'TARGET',
+      });
+      if (chartRef.current) chartRef.current.timeScale().scrollToRealTime();
+    }
+
+    // Reset baseline too
+    if (compareMode) {
+      setBlStatus('OPEN');
+      setBlExitPrice(null); setBlExitReason(''); setBlExitIdx(null);
+      setBlMaxFav(0); setBlMaxAdv(0);
+      if (seriesRef2.current && candles.length > 0) {
+        const ep = parseFloat(entryPrice);
+        const contextCandles = candles.slice(0, entryIdx + 1).map(c => ({
+          time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+        }));
+        seriesRef2.current.setData(contextCandles);
+        const bPnl = blDirection === 'LONG'
+          ? (candles[entryIdx].close - ep) * qty
+          : (ep - candles[entryIdx].close) * qty;
+        setBlPnl(bPnl);
+        setBlPnlPct(blDirection === 'LONG'
+          ? ((candles[entryIdx].close - ep) / ep) * 100
+          : ((ep - candles[entryIdx].close) / ep) * 100);
+        // Re-add markers and price lines
+        seriesRef2.current.setMarkers([{
+          time: candles[entryIdx].time,
+          position: 'belowBar', color: '#f59e0b', shape: 'arrowUp',
+          text: `ENTRY @ $${ep.toFixed(2)}`,
+        }]);
+        seriesRef2.current.createPriceLine({
+          price: blDirection === 'LONG' ? ep * (1 - blStopPct / 100) : ep * (1 + blStopPct / 100),
+          color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: 'STOP',
+        });
+        seriesRef2.current.createPriceLine({
+          price: blDirection === 'LONG' ? ep * (1 + blTpPct / 100) : ep * (1 - blTpPct / 100),
+          color: '#10b981', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true, title: 'TARGET',
+        });
+        if (chartRef2.current) chartRef2.current.timeScale().scrollToRealTime();
+      }
     }
   };
 
   const candlesElapsed = currentIdx - entryIdx;
   const isFinished = status === 'STOPPED_OUT' || status === 'TARGET_HIT' || status === 'EXPIRED';
+  const blIsFinished = blStatus === 'STOPPED_OUT' || blStatus === 'TARGET_HIT' || blStatus === 'EXPIRED';
+  const allFinished = compareMode ? (isFinished && blIsFinished) : isFinished;
   const finalPnl = exitPrice ? (direction === 'LONG' ? (exitPrice - parseFloat(entryPrice)) * qty : (parseFloat(entryPrice) - exitPrice) * qty) : 0;
   const finalPnlPct = exitPrice ? (direction === 'LONG' ? ((exitPrice - parseFloat(entryPrice)) / parseFloat(entryPrice)) * 100 : ((parseFloat(entryPrice) - exitPrice) / parseFloat(entryPrice)) * 100) : 0;
+  const blFinalPnl = blExitPrice ? (blDirection === 'LONG' ? (blExitPrice - parseFloat(entryPrice)) * qty : (parseFloat(entryPrice) - blExitPrice) * qty) : 0;
+  const blFinalPnlPct = blExitPrice ? (blDirection === 'LONG' ? ((blExitPrice - parseFloat(entryPrice)) / parseFloat(entryPrice)) * 100 : ((parseFloat(entryPrice) - blExitPrice) / parseFloat(entryPrice)) * 100) : 0;
 
   const statusColors = {
     IDLE: 'text-slate-400 bg-slate-800', OPEN: 'text-cyan-400 bg-cyan-900/30 border-cyan-700',
@@ -1554,291 +1944,374 @@ function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAc
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto">
-      {/* Signal banner — only shows when signal data exists but not auto-starting */}
-      {signalState && signalState.ticker && !replayActive && !loading && status === 'IDLE' && (
-        <div className="mx-4 mt-3 p-3 bg-cyan-900/20 border border-cyan-800 rounded-lg flex items-center justify-between">
-          <div className="text-xs text-cyan-300">
-            Signal from <span className="font-bold">{signalState.ticker} {signalState.quarter}</span> —
-            <span className={`font-bold ml-1 ${signalState.signal_label === 'LONG' ? 'text-green-400' : signalState.signal_label === 'SHORT' ? 'text-red-400' : 'text-yellow-400'}`}>{signalState.signal_label} {signalState.composite_signal?.toFixed(2)}</span>
-            {signalState.entry_price && <> @ ${signalState.entry_price}</>}
+    <div className="flex-1 flex overflow-hidden">
+      {/* LEFT SIDEBAR — Trade Setup + Account */}
+      <div className="w-72 border-r border-white/[0.04] flex flex-col overflow-y-auto p-4 space-y-3 bg-slate-900/30">
+        {/* Signal Banner */}
+        {signalState && signalState.ticker && !replayActive && !loading && status === 'IDLE' && (
+          <div className="p-2.5 bg-cyan-900/20 border border-cyan-800 rounded-xl">
+            <div className="text-xs text-cyan-300 mb-2">
+              Signal: <span className="font-bold">{signalState.ticker} {signalState.quarter}</span>
+              <span className={`font-bold ml-1 ${signalState.signal_label === 'LONG' ? 'text-green-400' : signalState.signal_label === 'SHORT' ? 'text-red-400' : 'text-yellow-400'}`}>{signalState.signal_label} {signalState.composite_signal?.toFixed(2)}</span>
+            </div>
+            <button onClick={loadFromSignal} className="w-full py-1.5 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-xs font-bold text-white">Load Signal</button>
           </div>
-          <button onClick={loadFromSignal} className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 rounded text-xs font-bold text-white">Load Signal Data</button>
-        </div>
-      )}
+        )}
 
-      {/* TOP SECTION — Trade Setup */}
-      <div className="p-4">
-        <div className="bg-white/[0.03] rounded-2xl p-6 ring-1 ring-white/[0.05] premium-shadow-lg">
-          <h2 className="text-[13px] font-medium text-slate-400 uppercase tracking-[0.14em] mb-5">Trade Setup</h2>
-          <div className="grid grid-cols-2 gap-6">
-            {/* Left inputs */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Ticker</label>
-                  <input type="text" value={replayTicker} onChange={e => setReplayTicker(e.target.value.toUpperCase())}
-                    placeholder="NVDA" className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Entry Date</label>
-                  <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
-                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Direction</label>
-                  <div className="flex rounded-xl overflow-hidden ring-1 ring-white/[0.06]">
-                    <button onClick={() => setDirection('LONG')}
-                      className={`flex-1 py-2 text-sm font-semibold transition-all ${direction === 'LONG' ? 'bg-emerald-500/80 text-white' : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06]'}`}>LONG</button>
-                    <button onClick={() => setDirection('SHORT')}
-                      className={`flex-1 py-2 text-sm font-semibold transition-all ${direction === 'SHORT' ? 'bg-rose-500/80 text-white' : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06]'}`}>SHORT</button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Entry Price (auto if blank)</label>
-                  <input type="number" step="0.01" value={entryPrice} onChange={e => setEntryPrice(e.target.value)}
-                    placeholder="Auto-fill from data" className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Position ($)</label>
-                  <input type="number" value={positionSize} onChange={e => setPositionSize(Number(e.target.value))}
-                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Stop Loss %</label>
-                  <input type="number" step="0.5" value={stopLossPct} onChange={e => setStopLossPct(Number(e.target.value))}
-                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Take Profit %</label>
-                  <input type="number" step="0.5" value={takeProfitPct} onChange={e => setTakeProfitPct(Number(e.target.value))}
-                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Interval</label>
-                  <select value={interval} onChange={e => setInterval_(e.target.value)}
-                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none">
-                    <option value="1d">Daily Candles</option>
-                    <option value="1h">Hourly Candles</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Replay Window</label>
-                  <select value={replayWindow} onChange={e => setReplayWindow(Number(e.target.value))}
-                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none">
-                    <option value={5}>5 candles</option>
-                    <option value={10}>10 candles</option>
-                    <option value={20}>20 candles</option>
-                  </select>
-                </div>
-              </div>
+        {/* Trade Setup */}
+        <div className="bg-white/[0.03] rounded-xl p-3.5 ring-1 ring-white/[0.05] space-y-2.5">
+          <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Trade Setup</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Ticker</label>
+              <input type="text" value={replayTicker} onChange={e => setReplayTicker(e.target.value.toUpperCase())}
+                placeholder="NVDA" className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs mono focus:border-sky-400/40 focus:outline-none" />
             </div>
-            {/* Right — signal info + start button */}
-            <div className="flex flex-col justify-between">
-              {signalState && signalState.ticker && (
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                      signalState.signal_label === 'LONG' ? 'bg-green-900/50 text-green-400 border border-green-600'
-                      : signalState.signal_label === 'SHORT' ? 'bg-red-900/50 text-red-400 border border-red-600'
-                      : 'bg-yellow-900/50 text-yellow-400 border border-yellow-600'
-                    }`}>{signalState.signal_label} {signalState.composite_signal?.toFixed(2)}</span>
-                    <span className="text-xs text-slate-400">Confidence: {((signalState.confidence || 0) * 100).toFixed(0)}%</span>
-                  </div>
-                  {signalState.one_line_summary && <p className="text-xs text-slate-400 italic">{signalState.one_line_summary}</p>}
-                </div>
-              )}
-              {!signalState?.ticker && (
-                <div className="text-xs text-slate-500 mb-4 p-3 bg-slate-800 rounded border border-slate-700">
-                  No signal data loaded. Run an analysis on the Signal Analysis page first, or manually enter trade parameters.
-                </div>
-              )}
-              <div className="space-y-3">
-                {qty > 0 && parseFloat(entryPrice) > 0 && (
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="bg-slate-700/50 rounded p-2 text-center">
-                      <div className="text-slate-500">Shares</div>
-                      <div className="mono font-bold text-slate-200">{qty}</div>
-                    </div>
-                    <div className="bg-slate-700/50 rounded p-2 text-center">
-                      <div className="text-slate-500">Stop</div>
-                      <div className="mono font-bold text-red-400">${stopPrice.toFixed(2)}</div>
-                    </div>
-                    <div className="bg-slate-700/50 rounded p-2 text-center">
-                      <div className="text-slate-500">Target</div>
-                      <div className="mono font-bold text-green-400">${targetPrice.toFixed(2)}</div>
-                    </div>
-                  </div>
-                )}
-                <button onClick={startReplay} disabled={loading || !replayTicker || !entryDate}
-                  className="w-full px-4 py-3 bg-gradient-to-b from-sky-400 to-sky-500 hover:from-sky-300 hover:to-sky-400 disabled:bg-white/[0.04] disabled:text-slate-600 disabled:from-transparent disabled:to-transparent rounded-2xl font-semibold text-sm text-white transition-all glow-pulse shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2">
-                  {loading ? <><Spinner /> Loading Data...</> : 'Start Replay'}
-                </button>
-              </div>
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Entry Date</label>
+              <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs focus:border-sky-400/40 focus:outline-none" />
             </div>
           </div>
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-0.5">Direction</label>
+            <div className="flex rounded-lg overflow-hidden ring-1 ring-white/[0.06]">
+              <button onClick={() => setDirection('LONG')}
+                className={`flex-1 py-1.5 text-xs font-semibold transition-all ${direction === 'LONG' ? 'bg-emerald-500/80 text-white' : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06]'}`}>LONG</button>
+              <button onClick={() => setDirection('SHORT')}
+                className={`flex-1 py-1.5 text-xs font-semibold transition-all ${direction === 'SHORT' ? 'bg-rose-500/80 text-white' : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06]'}`}>SHORT</button>
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-0.5">Entry Price <span className="text-slate-600">(auto if blank)</span></label>
+            <input type="number" step="0.01" value={entryPrice} onChange={e => setEntryPrice(e.target.value)}
+              placeholder="Auto" className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs mono focus:border-sky-400/40 focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Size ($)</label>
+              <input type="number" value={positionSize} onChange={e => setPositionSize(Number(e.target.value))}
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5 text-xs mono focus:border-sky-400/40 focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">SL %</label>
+              <input type="number" step="0.5" value={stopLossPct} onChange={e => setStopLossPct(Number(e.target.value))}
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5 text-xs mono focus:border-sky-400/40 focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">TP %</label>
+              <input type="number" step="0.5" value={takeProfitPct} onChange={e => setTakeProfitPct(Number(e.target.value))}
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5 text-xs mono focus:border-sky-400/40 focus:outline-none" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Interval</label>
+              <select value={interval} onChange={e => setInterval_(e.target.value)}
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5 text-xs focus:border-sky-400/40 focus:outline-none">
+                <option value="1d">Daily</option>
+                <option value="1h">Hourly</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Window</label>
+              <select value={replayWindow} onChange={e => setReplayWindow(Number(e.target.value))}
+                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5 text-xs focus:border-sky-400/40 focus:outline-none">
+                <option value={5}>5 candles</option>
+                <option value={10}>10 candles</option>
+                <option value={20}>20 candles</option>
+              </select>
+            </div>
+          </div>
+          {qty > 0 && parseFloat(entryPrice) > 0 && (
+            <div className="grid grid-cols-3 gap-1.5 text-xs">
+              <div className="bg-slate-700/50 rounded p-1.5 text-center">
+                <div className="text-[10px] text-slate-500">Shares</div>
+                <div className="mono font-bold text-slate-200">{qty}</div>
+              </div>
+              <div className="bg-slate-700/50 rounded p-1.5 text-center">
+                <div className="text-[10px] text-slate-500">Stop</div>
+                <div className="mono font-bold text-red-400">${stopPrice.toFixed(2)}</div>
+              </div>
+              <div className="bg-slate-700/50 rounded p-1.5 text-center">
+                <div className="text-[10px] text-slate-500">Target</div>
+                <div className="mono font-bold text-green-400">${targetPrice.toFixed(2)}</div>
+              </div>
+            </div>
+          )}
+          <button onClick={startReplay} disabled={loading || !replayTicker || !entryDate}
+            className="w-full px-3 py-2.5 bg-gradient-to-b from-sky-400 to-sky-500 hover:from-sky-300 hover:to-sky-400 disabled:bg-white/[0.04] disabled:text-slate-600 disabled:from-transparent disabled:to-transparent rounded-xl font-semibold text-xs text-white transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2">
+            {loading ? <><Spinner size="w-3 h-3" /> Loading...</> : 'Start Replay'}
+          </button>
+        </div>
+
+        {/* Account Summary */}
+        <div className="bg-white/[0.03] rounded-xl p-3.5 ring-1 ring-white/[0.05] space-y-2">
+          <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Account</h3>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="bg-slate-700/50 rounded p-1.5"><div className="text-[10px] text-slate-500">Equity</div><div className="text-xs font-bold mono text-slate-200">${simAccount.equity.toLocaleString()}</div></div>
+            <div className="bg-slate-700/50 rounded p-1.5"><div className="text-[10px] text-slate-500">Day P&L</div><div className={`text-xs font-bold mono ${simAccount.day_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{simAccount.day_pnl >= 0 ? '+' : ''}${simAccount.day_pnl.toLocaleString()}</div></div>
+          </div>
+        </div>
+
+        {/* Signal Breakdown */}
+        {signalState && signalState.sub_scores && (
+          <div className="bg-white/[0.03] rounded-xl p-3.5 ring-1 ring-white/[0.05] space-y-2">
+            <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Signal Breakdown</h3>
+            {[
+              { key: 'guidance_hedge', label: 'Guidance', weight: '35%' },
+              { key: 'analyst_pressure', label: 'Pressure', weight: '15%' },
+              { key: 'language_momentum', label: 'Momentum', weight: '50%' },
+            ].map(({ key, label, weight }) => {
+              const d = signalState.sub_scores[key];
+              if (!d) return null;
+              const s = d.score || 0;
+              const pct = ((s + 1) / 2) * 100;
+              const color = s > 0.15 ? '#10b981' : s < -0.15 ? '#ef4444' : '#f59e0b';
+              return (
+                <div key={key}>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">{label} <span className="text-slate-600">({weight})</span></span>
+                    <span className="mono font-bold" style={{ color }}>{s > 0 ? '+' : ''}{s.toFixed(2)}</span>
+                  </div>
+                  <div className="h-1 bg-slate-700 rounded mt-0.5">
+                    <div className="h-full rounded" style={{ width: `${pct}%`, background: color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Comparative Analysis Button */}
+        {signalState?.transcript_text && !compareMode && (
+          <button onClick={activateCompare}
+            className="w-full px-3 py-2 bg-gradient-to-b from-violet-500/80 to-violet-600/80 hover:from-violet-400/80 hover:to-violet-500/80 rounded-xl font-semibold text-xs text-white transition-all shadow-lg shadow-violet-500/20 flex items-center justify-center gap-2">
+            Comparative Analysis
+          </button>
+        )}
+        {compareMode && (
+          <button onClick={() => setCompareMode(false)}
+            className="w-full px-3 py-2 bg-white/[0.06] hover:bg-white/[0.1] rounded-xl font-semibold text-xs text-slate-300 transition-all flex items-center justify-center gap-2">
+            Exit Compare Mode
+          </button>
+        )}
+
+        {/* Baseline Signal Info (in compare mode) */}
+        {compareMode && baselineSignal && (
+          <div className="bg-white/[0.03] rounded-xl p-3.5 ring-1 ring-white/[0.05] space-y-2">
+            <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Baseline Model</h3>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Signal</span>
+              <span className={`text-xs font-black mono ${baselineSignal.signal_label === 'LONG' ? 'text-green-400' : baselineSignal.signal_label === 'SHORT' ? 'text-red-400' : 'text-yellow-400'}`}>
+                {baselineSignal.signal_label} {baselineSignal.composite_signal.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Keywords</span>
+              <span className="text-[10px] mono text-slate-400">
+                <span className="text-green-400">{baselineSignal.positive_count}</span> pos / <span className="text-red-400">{baselineSignal.negative_count}</span> neg
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Sentences</span>
+              <span className="text-[10px] mono text-slate-400">{baselineSignal.total_sentences}</span>
+            </div>
+            {baselineSignal.sub_scores && Object.entries(baselineSignal.sub_scores).map(([key, d]) => {
+              const s = d.score || 0;
+              const pct = ((s + 1) / 2) * 100;
+              const color = s > 0.15 ? '#10b981' : s < -0.15 ? '#ef4444' : '#f59e0b';
+              const labels = { guidance_hedge: 'Guidance', analyst_pressure: 'Pressure', language_momentum: 'Momentum' };
+              return (
+                <div key={key}>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">{labels[key] || key}</span>
+                    <span className="mono font-bold" style={{ color }}>{s > 0 ? '+' : ''}{s.toFixed(2)}</span>
+                  </div>
+                  <div className="h-1 bg-slate-700 rounded mt-0.5">
+                    <div className="h-full rounded" style={{ width: `${pct}%`, background: color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="text-[10px] text-slate-600 text-center mt-auto pt-2">
+          Simulated results. Not financial advice.
         </div>
       </div>
 
-      {/* BOTTOM SECTION — Replay Canvas */}
-      <div className="flex-1 px-4 pb-4 flex gap-4">
-        {/* Chart + Controls */}
-        <div className="flex-1 flex flex-col">
-          <div className="bg-white/[0.02] rounded-2xl ring-1 ring-white/[0.05] premium-shadow-lg flex-1 flex flex-col overflow-hidden">
-            <div ref={chartContainerRef} className="flex-1 min-h-[420px]" />
-            {/* Replay controls */}
-            <div className="flex items-center gap-3 px-5 py-3.5 border-t border-white/[0.04] glass-panel">
-              <button onClick={() => setPlaying(!playing)} disabled={!replayActive || isFinished}
-                className={`px-5 py-1.5 rounded-xl font-semibold text-sm ${playing ? 'bg-amber-500/80 hover:bg-amber-400/80 text-white' : 'bg-sky-500/80 hover:bg-sky-400/80 text-white'} disabled:bg-white/[0.04] disabled:text-slate-600`}>
-                {playing ? 'Pause' : 'Play'}
-              </button>
-              <button onClick={stepForward} disabled={!replayActive || isFinished || playing}
-                className="px-4 py-1.5 rounded-xl text-sm bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 disabled:bg-white/[0.02] disabled:text-slate-600 font-medium">
-                Step
-              </button>
-              <button onClick={resetReplay} disabled={!replayActive}
-                className="px-4 py-1.5 rounded-xl text-sm bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 disabled:bg-white/[0.02] disabled:text-slate-600 font-medium">
-                Reset
-              </button>
-              <div className="flex items-center gap-2 ml-4">
-                <span className="text-xs text-slate-400">Speed:</span>
-                {[1, 2, 5, 10].map(s => (
-                  <button key={s} onClick={() => setSpeed(s)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${speed === s ? 'bg-sky-500/80 text-white' : 'bg-white/[0.05] text-slate-400 hover:bg-white/[0.1]'}`}>
-                    {s}x
-                  </button>
-                ))}
+      {/* MAIN AREA — Chart(s) + P&L */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Charts area */}
+        <div className={`flex-1 flex ${compareMode ? 'gap-0' : ''} overflow-hidden`}>
+          {/* Panel 1: Advanced Model (or single chart when not comparing) */}
+          <div className={`${compareMode ? 'flex-1 border-r border-white/[0.06]' : 'flex-1'} flex flex-col overflow-hidden`}>
+            {/* Panel Header */}
+            {compareMode && (
+              <div className="flex items-center gap-2 px-4 py-1.5 bg-cyan-900/15 border-b border-cyan-800/30">
+                <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
+                <span className="text-[11px] font-bold text-cyan-300 uppercase tracking-wider">Advanced Model</span>
+                <span className={`ml-auto text-[10px] font-bold mono ${signalState?.signal_label === 'LONG' ? 'text-green-400' : signalState?.signal_label === 'SHORT' ? 'text-red-400' : 'text-yellow-400'}`}>
+                  {signalState?.signal_label} {signalState?.composite_signal?.toFixed(2)}
+                </span>
               </div>
-              <div className="ml-auto text-xs text-slate-500 mono">
-                Candle {candlesElapsed} / {replayWindow}
+            )}
+            {/* P&L Strip */}
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.04] bg-white/[0.015]">
+              <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColors[status] || statusColors.IDLE}`}>
+                {status.replace('_', ' ')}
               </div>
-            </div>
-          </div>
-          {error && <div className="mt-2 text-xs text-red-400 bg-red-900/20 rounded p-2 border border-red-800">{error}</div>}
-        </div>
-
-        {/* Live P&L Sidebar */}
-        <div className="w-60 flex flex-col gap-3">
-          {/* Signal Context — sub-scores from analysis */}
-          {signalState && signalState.sub_scores && (
-            <div className="bg-white/[0.03] rounded-2xl p-4 ring-1 ring-white/[0.05] premium-shadow space-y-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-3 bg-cyan-500 rounded-full"></div>
-                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Signal Breakdown</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500">Price</span>
+                <span className={`${compareMode ? 'text-xs' : 'text-sm'} font-black mono text-slate-100`}>${currentPrice.toFixed(2)}</span>
               </div>
-              {[
-                { key: 'guidance_hedge', label: 'Guidance', weight: '35%' },
-                { key: 'analyst_pressure', label: 'Analyst Pressure', weight: '15%' },
-                { key: 'language_momentum', label: 'Language', weight: '50%' },
-              ].map(({ key, label, weight }) => {
-                const d = signalState.sub_scores[key];
-                if (!d) return null;
-                const s = d.score || 0;
-                const pct = ((s + 1) / 2) * 100;
-                const color = s > 0.15 ? '#10b981' : s < -0.15 ? '#ef4444' : '#f59e0b';
-                return (
-                  <div key={key}>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">{label} <span className="text-slate-600">({weight})</span></span>
-                      <span className="mono font-bold" style={{ color }}>{s > 0 ? '+' : ''}{s.toFixed(2)}</span>
-                    </div>
-                    <div className="h-1 bg-slate-700 rounded mt-0.5">
-                      <div className="h-full rounded" style={{ width: `${pct}%`, background: color }} />
-                    </div>
-                  </div>
-                );
-              })}
-              {signalState.sub_scores.earnings_surprise && (
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">EPS Surprise <span className="text-slate-600">(conf.)</span></span>
-                    <span className="mono font-bold" style={{ color: (signalState.sub_scores.earnings_surprise.score || 0) > 0 ? '#10b981' : '#ef4444' }}>
-                      {(signalState.sub_scores.earnings_surprise.score || 0) > 0 ? '+' : ''}{(signalState.sub_scores.earnings_surprise.score || 0).toFixed(2)}
-                    </span>
-                  </div>
-                  {signalState.sub_scores.earnings_surprise.surprise_pct != null && (
-                    <div className="text-xs text-slate-600 mono mt-0.5">
-                      {signalState.sub_scores.earnings_surprise.beat ? 'Beat' : 'Missed'} by {Math.abs(signalState.sub_scores.earnings_surprise.surprise_pct).toFixed(1)}%
-                    </div>
-                  )}
+              <div className="h-3 w-px bg-white/[0.06]" />
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500">P&L</span>
+                <span className={`${compareMode ? 'text-xs' : 'text-sm'} font-black mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
+                </span>
+                <span className={`text-[10px] mono ${pnlPct >= 0 ? 'text-green-400/60' : 'text-red-400/60'}`}>
+                  ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+                </span>
+              </div>
+              {!compareMode && (<>
+                <div className="h-3 w-px bg-white/[0.06]" />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1"><span className="text-[10px] text-slate-500">Best</span><span className="text-xs mono font-bold text-green-400">{maxFav >= 0 ? '+' : ''}${maxFav.toFixed(0)}</span></div>
+                  <div className="flex items-center gap-1"><span className="text-[10px] text-slate-500">Worst</span><span className="text-xs mono font-bold text-red-400">${maxAdv.toFixed(0)}</span></div>
                 </div>
-              )}
-              {signalState.calibration && (
-                <div className="pt-1 border-t border-slate-700 mt-1">
-                  <div className="text-xs text-slate-500">Expected Move</div>
-                  <div className="text-xs mono text-cyan-400 font-bold">{signalState.calibration.expected_move || 'N/A'}</div>
-                  <div className="text-xs text-slate-600 mt-0.5">Accuracy: {signalState.calibration.historical_accuracy || 'N/A'}</div>
-                </div>
-              )}
-            </div>
-          )}
-          <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow space-y-4">
-            <div className={`text-center px-3 py-2 rounded-full text-xs font-bold uppercase tracking-[0.1em] ring-1 ring-white/[0.06] ${statusColors[status] || statusColors.IDLE}`}>
-              {status.replace('_', ' ')}
-            </div>
-            <div className="text-center py-1">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Current Price</div>
-              <div className="text-2xl font-black mono text-slate-100">${currentPrice.toFixed(2)}</div>
-            </div>
-            <div className={`rounded-lg p-2.5 text-center ${pnl >= 0 ? 'bg-green-500/5 border border-green-500/15' : 'bg-red-500/5 border border-red-500/15'}`}>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Unrealized P&L</div>
-              <div className={`text-xl font-black mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
-              </div>
-              <div className={`text-sm mono font-bold ${pnlPct >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+              </>)}
+              <div className="ml-auto text-[10px] text-slate-500 mono">
+                {candlesElapsed}/{replayWindow}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-slate-900/40 rounded-lg p-1.5 text-center">
-                <div className="text-[10px] text-slate-500">Best</div>
-                <div className="text-xs font-bold mono text-green-400">{maxFav >= 0 ? '+' : ''}${maxFav.toFixed(2)}</div>
-              </div>
-              <div className="bg-slate-900/40 rounded-lg p-1.5 text-center">
-                <div className="text-[10px] text-slate-500">Worst</div>
-                <div className="text-xs font-bold mono text-red-400">{maxAdv <= 0 ? '' : '+'}${maxAdv.toFixed(2)}</div>
-              </div>
+            {/* Chart */}
+            <div className="flex-1 relative">
+              <div ref={chartContainerRef} className="absolute inset-0" />
             </div>
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] text-slate-500 uppercase">Candles</span>
-              <span className="text-sm font-bold mono text-slate-200">{candlesElapsed} / {replayWindow}</span>
-            </div>
+            {/* Result badge below chart when finished */}
+            {isFinished && (
+              <div className={`flex items-center gap-2 px-4 py-1.5 border-t ${finalPnl >= 0 ? 'bg-green-900/10 border-green-800/30' : 'bg-red-900/10 border-red-800/30'}`}>
+                <span className={`text-[10px] font-black uppercase ${finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {status === 'TARGET_HIT' ? 'TARGET' : status === 'STOPPED_OUT' ? 'STOPPED' : 'EXPIRED'}
+                </span>
+                <span className={`text-xs font-black mono ${finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {finalPnl >= 0 ? '+' : ''}${finalPnl.toFixed(2)} ({finalPnlPct >= 0 ? '+' : ''}{finalPnlPct.toFixed(1)}%)
+                </span>
+                <span className="text-[10px] text-slate-500 mono ml-auto">{exitIdx - entryIdx} candles</span>
+              </div>
+            )}
           </div>
 
-          {/* Trade result card */}
-          {isFinished && (
-            <div className={`fade-in rounded-xl p-4 border space-y-2 ${finalPnl >= 0 ? 'bg-green-900/20 border-green-700' : 'bg-red-900/20 border-red-700'}`}>
-              <div className={`text-center text-lg font-black ${finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {status === 'TARGET_HIT' ? 'TARGET HIT' : status === 'STOPPED_OUT' ? 'STOPPED OUT' : 'EXPIRED'}
+          {/* Panel 2: Baseline Model (only in compare mode) */}
+          {compareMode && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Panel Header */}
+              <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-900/15 border-b border-amber-800/30">
+                <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+                <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">Baseline: Keyword Sentiment</span>
+                <span className={`ml-auto text-[10px] font-bold mono ${baselineSignal?.signal_label === 'LONG' ? 'text-green-400' : baselineSignal?.signal_label === 'SHORT' ? 'text-red-400' : 'text-yellow-400'}`}>
+                  {baselineSignal?.signal_label} {baselineSignal?.composite_signal?.toFixed(2)}
+                </span>
               </div>
-              <div className="text-xs space-y-1 text-slate-300">
-                <div className="flex justify-between"><span className="text-slate-500">Entry:</span><span className="mono">${parseFloat(entryPrice).toFixed(2)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Exit:</span><span className="mono">${exitPrice?.toFixed(2)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">P&L:</span>
-                  <span className={`mono font-bold ${finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {finalPnl >= 0 ? '+' : ''}${finalPnl.toFixed(2)} ({finalPnlPct >= 0 ? '+' : ''}{finalPnlPct.toFixed(2)}%)
+              {/* Baseline P&L Strip */}
+              <div className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.04] bg-white/[0.015]">
+                <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColors[blStatus] || statusColors.IDLE}`}>
+                  {blStatus.replace('_', ' ')}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-500">Price</span>
+                  <span className="text-xs font-black mono text-slate-100">${currentPrice.toFixed(2)}</span>
+                </div>
+                <div className="h-3 w-px bg-white/[0.06]" />
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-500">P&L</span>
+                  <span className={`text-xs font-black mono ${blPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {blPnl >= 0 ? '+' : ''}${blPnl.toFixed(2)}
+                  </span>
+                  <span className={`text-[10px] mono ${blPnlPct >= 0 ? 'text-green-400/60' : 'text-red-400/60'}`}>
+                    ({blPnlPct >= 0 ? '+' : ''}{blPnlPct.toFixed(1)}%)
                   </span>
                 </div>
-                <div className="flex justify-between"><span className="text-slate-500">Duration:</span><span className="mono">{exitIdx - entryIdx} candles</span></div>
+                <div className="ml-auto text-[10px] text-slate-500 mono">
+                  {candlesElapsed}/{replayWindow}
+                </div>
               </div>
-              <div className="space-y-1.5 pt-1">
-                <button onClick={resetReplay} className="w-full py-1.5 bg-cyan-700 hover:bg-cyan-600 rounded text-xs font-bold text-white">Replay Again</button>
-                <button onClick={() => { setReplayActive(false); setCandles([]); setStatus('IDLE'); setEntryPrice(''); }}
-                  className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-300">Try Different Params</button>
+              {/* Baseline Chart */}
+              <div className="flex-1 relative">
+                <div ref={chartContainerRef2} className="absolute inset-0" />
               </div>
+              {/* Baseline result badge */}
+              {blIsFinished && (
+                <div className={`flex items-center gap-2 px-4 py-1.5 border-t ${blFinalPnl >= 0 ? 'bg-green-900/10 border-green-800/30' : 'bg-red-900/10 border-red-800/30'}`}>
+                  <span className={`text-[10px] font-black uppercase ${blFinalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {blStatus === 'TARGET_HIT' ? 'TARGET' : blStatus === 'STOPPED_OUT' ? 'STOPPED' : 'EXPIRED'}
+                  </span>
+                  <span className={`text-xs font-black mono ${blFinalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {blFinalPnl >= 0 ? '+' : ''}${blFinalPnl.toFixed(2)} ({blFinalPnlPct >= 0 ? '+' : ''}{blFinalPnlPct.toFixed(1)}%)
+                  </span>
+                  <span className="text-[10px] text-slate-500 mono ml-auto">{blExitIdx - entryIdx} candles</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Controls Bar (shared) */}
+        <div className="flex items-center gap-3 px-5 py-2.5 border-t border-white/[0.04] bg-white/[0.015]">
+          <button onClick={() => setPlaying(!playing)} disabled={!replayActive || allFinished}
+            className={`px-5 py-1.5 rounded-lg font-semibold text-xs ${playing ? 'bg-amber-500/80 hover:bg-amber-400/80 text-white' : 'bg-sky-500/80 hover:bg-sky-400/80 text-white'} disabled:bg-white/[0.04] disabled:text-slate-600`}>
+            {playing ? 'Pause' : 'Play'}
+          </button>
+          <button onClick={stepForward} disabled={!replayActive || allFinished || playing}
+            className="px-4 py-1.5 rounded-lg text-xs bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 disabled:bg-white/[0.02] disabled:text-slate-600 font-medium">
+            Step
+          </button>
+          <button onClick={resetReplay} disabled={!replayActive}
+            className="px-4 py-1.5 rounded-lg text-xs bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 disabled:bg-white/[0.02] disabled:text-slate-600 font-medium">
+            Reset
+          </button>
+          <div className="flex items-center gap-1.5 ml-2">
+            <span className="text-[10px] text-slate-400">Speed</span>
+            {[1, 2, 5, 10].map(s => (
+              <button key={s} onClick={() => setSpeed(s)}
+                className={`px-2 py-1 rounded text-[10px] font-semibold ${speed === s ? 'bg-sky-500/80 text-white' : 'bg-white/[0.05] text-slate-400 hover:bg-white/[0.1]'}`}>
+                {s}x
+              </button>
+            ))}
+          </div>
+
+          {/* Comparison Summary (when both finished in compare mode) */}
+          {compareMode && allFinished && (
+            <div className="ml-auto flex items-center gap-3 fade-in">
+              <div className={`px-3 py-1 rounded-lg text-[10px] font-black border ${finalPnl > blFinalPnl ? 'text-cyan-300 bg-cyan-900/30 border-cyan-700' : 'text-amber-300 bg-amber-900/30 border-amber-700'}`}>
+                {finalPnl > blFinalPnl ? 'Advanced Wins' : finalPnl < blFinalPnl ? 'Baseline Wins' : 'Tie'}
+                <span className="ml-2 mono text-slate-400">
+                  ${finalPnl.toFixed(0)} vs ${blFinalPnl.toFixed(0)}
+                </span>
+              </div>
+              <button onClick={resetReplay} className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-[10px] font-bold text-white">Again</button>
             </div>
           )}
 
-          <div className="text-xs text-slate-600 text-center mt-auto pt-2">
-            Simulated results using historical data. Not financial advice.
-          </div>
+          {/* Single-mode result */}
+          {!compareMode && isFinished && (
+            <div className="ml-auto flex items-center gap-3 fade-in">
+              <div className={`px-3 py-1 rounded-lg text-xs font-black ${finalPnl >= 0 ? 'text-green-400 bg-green-900/30 border border-green-700' : 'text-red-400 bg-red-900/30 border border-red-700'}`}>
+                {status === 'TARGET_HIT' ? 'TARGET HIT' : status === 'STOPPED_OUT' ? 'STOPPED OUT' : 'EXPIRED'}
+                <span className="ml-2 mono">{finalPnl >= 0 ? '+' : ''}${finalPnl.toFixed(2)} ({finalPnlPct >= 0 ? '+' : ''}{finalPnlPct.toFixed(1)}%)</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mono">{exitIdx - entryIdx} candles</div>
+              <button onClick={resetReplay} className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 rounded-lg text-[10px] font-bold text-white">Again</button>
+              <button onClick={() => { setReplayActive(false); setCandles([]); setStatus('IDLE'); setEntryPrice(''); }}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] font-bold text-slate-300">New</button>
+            </div>
+          )}
         </div>
+        {error && <div className="mx-4 mb-2 text-xs text-red-400 bg-red-900/20 rounded p-2 border border-red-800">{error}</div>}
       </div>
     </div>
   );
