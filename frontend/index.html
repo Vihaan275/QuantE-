@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Earnings Alpha Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone@7.23.9/babel.min.js"></script>
+  <script>window.PropTypes = window.PropTypes || PropTypes;</script>
+  <script crossorigin src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
+  <script crossorigin src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: { 900: '#0c1018', 800: '#131a2a', 700: '#1c2640', 600: '#2d3a54' },
+            accent: { cyan: '#38bdf8', green: '#34d399', red: '#f87171', yellow: '#fbbf24', purple: '#a78bfa' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #0c1018; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    .mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+    textarea { resize: none; }
+    @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeSlideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 12px rgba(56, 189, 248, 0.15), 0 0 3px rgba(56, 189, 248, 0.3); } 50% { box-shadow: 0 0 24px rgba(56, 189, 248, 0.25), 0 0 6px rgba(56, 189, 248, 0.4); } }
+    .glow-pulse { animation: pulse-glow 3s ease-in-out infinite; }
+    .gauge-needle { transition: transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 150px 140px; }
+    @keyframes barFill { from { width: 50%; } }
+    .bar-fill { animation: barFill 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    @keyframes scoreCount { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .score-pop { animation: scoreCount 0.4s ease-out 0.6s both; }
+    @keyframes gaugeScore { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+    .gauge-score-pop { animation: gaugeScore 0.5s ease-out 0.8s both; }
+    select, input, textarea { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    select:focus, input:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.4) !important; }
+    button { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+    button:hover:not(:disabled) { transform: translateY(-1px); }
+    button:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .shimmer { background: linear-gradient(90deg, transparent 25%, rgba(56,189,248,0.04) 50%, transparent 75%); background-size: 200% 100%; animation: shimmer 2s infinite; }
+    @keyframes eqBar1 { 0%,100% { height: 4px; } 50% { height: 14px; } }
+    @keyframes eqBar2 { 0%,100% { height: 10px; } 50% { height: 4px; } }
+    @keyframes eqBar3 { 0%,100% { height: 6px; } 50% { height: 16px; } }
+    .eq-bar-1 { animation: eqBar1 0.6s ease-in-out infinite; }
+    .eq-bar-2 { animation: eqBar2 0.5s ease-in-out infinite 0.1s; }
+    .eq-bar-3 { animation: eqBar3 0.7s ease-in-out infinite 0.2s; }
+    .glass-panel { background: rgba(19, 26, 42, 0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+    .premium-shadow { box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.03); }
+    .premium-shadow-lg { box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 8px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04); }
+    /* Motion blur during auto-scroll */
+    .scroll-blur-wrap { position: relative; overflow: hidden; }
+    .scroll-blur-wrap::before,
+    .scroll-blur-wrap::after {
+      content: ''; position: absolute; left: 0; right: 0; height: 0; z-index: 10;
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), height 0.6s cubic-bezier(0.16,1,0.3,1);
+    }
+    .scroll-blur-wrap::before {
+      top: 0;
+      background: linear-gradient(to bottom, rgba(12,16,24,0.9) 0%, rgba(12,16,24,0.4) 50%, transparent 100%);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .scroll-blur-wrap::after {
+      bottom: 0;
+      background: linear-gradient(to top, rgba(12,16,24,0.9) 0%, rgba(12,16,24,0.4) 50%, transparent 100%);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .scroll-blur-active::before,
+    .scroll-blur-active::after { opacity: 1; height: 80px; }
+    .scroll-blur-active > div {
+      mask-image: linear-gradient(to bottom, transparent 0%, black 80px, black calc(100% - 80px), transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 80px, black calc(100% - 80px), transparent 100%);
+    }
+  </style>
+</head>
+<body class="h-screen overflow-hidden">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell, Legend } = Recharts;
+
+const API = window.location.origin;
+
+// ===================== SHARED COMPONENTS =====================
+
+function SignalGauge({ score, label, confidence }) {
+  // Animate needle from 0 to target score
+  const [animScore, setAnimScore] = useState(0);
+  const [showLabel, setShowLabel] = useState(false);
+  useEffect(() => {
+    setAnimScore(0);
+    setShowLabel(false);
+    const t1 = setTimeout(() => setAnimScore(score), 100);
+    const t2 = setTimeout(() => setShowLabel(true), 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [score]);
+
+  const angle = -90 + (animScore + 1) * 90;
+  const getColor = (s) => s > 0.25 ? '#10b981' : s < -0.25 ? '#ef4444' : '#f59e0b';
+  const labelColor = label === 'LONG' ? 'text-green-400' : label === 'SHORT' ? 'text-red-400' : 'text-yellow-400';
+  const labelBg = label === 'LONG' ? 'bg-emerald-500/10 ring-1 ring-emerald-400/20' : label === 'SHORT' ? 'bg-rose-500/10 ring-1 ring-rose-400/20' : 'bg-amber-500/10 ring-1 ring-amber-400/20';
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="300" height="170" viewBox="0 0 300 170">
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#ef4444" /><stop offset="35%" stopColor="#f59e0b" />
+            <stop offset="50%" stopColor="#f59e0b" /><stop offset="65%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+        </defs>
+        <path d="M 30 140 A 120 120 0 0 1 270 140" fill="none" stroke="#1e293b" strokeWidth="20" strokeLinecap="round" />
+        <path d="M 30 140 A 120 120 0 0 1 270 140" fill="none" stroke="url(#gaugeGrad)" strokeWidth="12" strokeLinecap="round" />
+        {[-1, -0.5, 0, 0.5, 1].map((v, i) => {
+          const a = (-90 + (v + 1) * 90) * Math.PI / 180;
+          const x1 = 150 + 105 * Math.cos(a), y1 = 140 + 105 * Math.sin(a) * -1;
+          const x2 = 150 + 115 * Math.cos(a), y2 = 140 + 115 * Math.sin(a) * -1;
+          const tx = 150 + 130 * Math.cos(a), ty = 140 + 130 * Math.sin(a) * -1;
+          return <g key={i}>
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#64748b" strokeWidth="2" />
+            <text x={tx} y={ty} textAnchor="middle" fill="#94a3b8" fontSize="10">{v}</text>
+          </g>;
+        })}
+        <g className="gauge-needle" style={{ transform: `rotate(${angle}deg)` }}>
+          <line x1="150" y1="140" x2="150" y2="40" stroke={getColor(animScore)} strokeWidth="3" strokeLinecap="round" />
+          <circle cx="150" cy="140" r="6" fill={getColor(animScore)} />
+        </g>
+        <text x="150" y="125" textAnchor="middle" fill="#e2e8f0" fontSize="28" fontWeight="bold" className="mono gauge-score-pop">{score.toFixed(2)}</text>
+      </svg>
+      <div className={`px-6 py-2 rounded-full text-sm font-bold tracking-[0.08em] ${labelBg} ${labelColor} mt-2`}
+        style={{ opacity: showLabel ? 1 : 0, transform: showLabel ? 'scale(1)' : 'scale(0.8)', transition: 'all 0.4s ease-out' }}>
+        {label || '---'}
+      </div>
+      {confidence != null && (
+        <div className="flex items-center gap-1.5 mt-1.5" style={{ opacity: showLabel ? 1 : 0, transition: 'opacity 0.4s ease-out 0.2s' }}>
+          <div className="w-12 h-1 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-full bg-cyan-500 rounded-full" style={{ width: showLabel ? `${confidence * 100}%` : '0%', transition: 'width 0.6s ease-out 0.3s' }}></div>
+          </div>
+          <span className="text-xs text-slate-400 mono">{(confidence * 100).toFixed(0)}% conf.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubScoreBar({ name, data, visible, ci }) {
+  const [expanded, setExpanded] = useState(false);
+  const [animatedPct, setAnimatedPct] = useState(50); // starts at center (0 score)
+  const score = (data && data.score) || 0;
+  const targetPct = ((score + 1) / 2) * 100;
+
+  // Animate bar fill from center to target — MUST be above early return to satisfy Rules of Hooks
+  useEffect(() => {
+    if (!visible) return;
+    const t = setTimeout(() => setAnimatedPct(targetPct), 50);
+    return () => clearTimeout(t);
+  }, [targetPct, visible]);
+
+  if (!visible) return null;
+  const barColor = score > 0.1 ? 'bg-green-500' : score < -0.1 ? 'bg-red-500' : 'bg-yellow-500';
+  const labels = { earnings_surprise: 'Earnings Surprise', guidance_hedge: 'Guidance Hedge', analyst_pressure: 'Analyst Pressure', language_momentum: 'Language Momentum' };
+  const ciLoPct = ci ? ((ci.ci_lo + 1) / 2) * 100 : null;
+  const ciHiPct = ci ? ((ci.ci_hi + 1) / 2) * 100 : null;
+
+  return (
+    <div className="fade-in mb-2.5 bg-white/[0.03] rounded-2xl p-4 ring-1 ring-white/[0.04] hover:ring-white/[0.08] transition-all premium-shadow">
+      <div className="flex justify-between items-center mb-1.5">
+        <span className="text-sm font-semibold text-slate-200">{labels[name] || name}</span>
+        <div className="flex items-center gap-2">
+          {ci && <span className="text-[10px] text-slate-500 mono">[{ci.ci_lo.toFixed(2)}, {ci.ci_hi.toFixed(2)}]</span>}
+          <span className={`score-pop mono text-sm font-black px-2 py-0.5 rounded ${score > 0.1 ? 'text-green-400 bg-green-500/10' : score < -0.1 ? 'text-red-400 bg-red-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>{score > 0 ? '+' : ''}{score.toFixed(2)}</span>
+        </div>
+      </div>
+      <div className="w-full bg-white/[0.06] rounded-full h-1 mb-2.5 relative overflow-hidden">
+        <div className={`h-1 rounded-full ${barColor}`}
+          style={{ width: `${animatedPct}%`, transition: 'width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)' }}></div>
+        {ci && ciLoPct != null && (
+          <div className="absolute top-0 h-2 border-l border-r border-slate-400/60"
+            style={{ left: `${ciLoPct}%`, width: `${ciHiPct - ciLoPct}%` }}>
+            <div className="absolute inset-0 bg-white/10 rounded"></div>
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-slate-400 mb-1">{data.explanation}</p>
+      {name === 'earnings_surprise' && data.reported_eps != null && (
+        <div className="flex gap-3 mb-1">
+          <div className="text-xs"><span className="text-slate-500">Reported:</span> <span className="mono font-bold text-slate-200">${data.reported_eps.toFixed(2)}</span></div>
+          <div className="text-xs"><span className="text-slate-500">Expected:</span> <span className="mono font-bold text-slate-200">${data.estimated_eps.toFixed(2)}</span></div>
+          <div className={`text-xs mono font-bold ${data.beat ? 'text-green-400' : 'text-red-400'}`}>{data.surprise_pct > 0 ? '+' : ''}{data.surprise_pct.toFixed(1)}%</div>
+        </div>
+      )}
+      {data.top_sentences && data.top_sentences.length > 0 && name !== 'earnings_surprise' && (
+        <button onClick={() => setExpanded(!expanded)} className="text-xs text-cyan-400 hover:text-cyan-300 mt-1">
+          {expanded ? 'Hide' : 'Show'} key sentences ({data.top_sentences.length})
+        </button>
+      )}
+      {expanded && data.top_sentences && (
+        <div className="mt-2 space-y-2">
+          {data.top_sentences.map((s, i) => (
+            <div key={i} className={`text-xs p-2 rounded border-l-2 ${s.score_contribution > 0 ? 'border-green-500 bg-green-900/20' : 'border-red-500 bg-red-900/20'}`}>
+              <p className="text-slate-300 italic">"{s.text}"</p>
+              <p className="text-slate-500 mt-1 mono">{s.reason}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Spinner({ size = 'w-5 h-5' }) {
+  return <div className={`${size} border-2 border-sky-400/70 border-t-transparent rounded-full animate-spin`}></div>;
+}
+
+// ===================== PAGE 1: SIGNAL ANALYSIS =====================
+
+function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
+  const [samples, setSamples] = useState([]);
+  const [selectedSample, setSelectedSample] = useState('');
+  const [transcript, setTranscript] = useState('');
+  const [ticker, setTicker] = useState('');
+  const [quarter, setQuarter] = useState('');
+  const [earningsDate, setEarningsDate] = useState('');
+  const [fetchTicker, setFetchTicker] = useState('');
+  const [fetchQuarter, setFetchQuarter] = useState('');
+  const [loadedMeta, setLoadedMeta] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [parseResult, setParseResult] = useState(null);
+  const [subScores, setSubScores] = useState({});
+  const [composite, setComposite] = useState(null);
+  const [priceData, setPriceData] = useState(null);
+  const [eventLog, setEventLog] = useState([]);
+  const [backtesting, setBacktesting] = useState(false);
+  const [backtestResult, setBacktestResult] = useState(null);
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [alpacaConnected, setAlpacaConnected] = useState(false);
+  const [alpacaAccount, setAlpacaAccount] = useState(null);
+  const [positions, setPositions] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [tradeExecuting, setTradeExecuting] = useState(false);
+  const [tradeResult, setTradeResult] = useState(null);
+  const [tradePreview, setTradePreview] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [sentenceAttributions, setSentenceAttributions] = useState([]);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [bootstrapCIs, setBootstrapCIs] = useState({});
+  const [ttsStatus, setTtsStatus] = useState('idle'); // idle | generating | playing
+  const [ttsScript, setTtsScript] = useState('');
+  const [ttsMuted, setTtsMuted] = useState(false);
+  const ttsMutedRef = useRef(false);
+  const ttsAudioRef = useRef(null);
+  const centerPanelRef = useRef(null);
+  const autoScrollRef = useRef(null);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const logRef = useRef(null);
+  const subScoresRef = useRef({});
+
+  const refreshTrading = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/trading/status`);
+      const d = await r.json();
+      setAlpacaConnected(d.connected);
+      if (d.connected) {
+        setAlpacaAccount(d.account);
+        const [posR, ordR] = await Promise.all([
+          fetch(`${API}/trading/positions`).then(x => x.json()),
+          fetch(`${API}/trading/orders`).then(x => x.json()),
+        ]);
+        setPositions(Array.isArray(posR) ? posR : []);
+        setOrders(Array.isArray(ordR) ? ordR : []);
+      }
+    } catch (e) { setAlpacaConnected(false); }
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API}/samples`).then(r => r.json()).then(d => setSamples(d.samples || [])).catch(() => {});
+    refreshTrading();
+  }, []);
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [eventLog]);
+
+  const addLog = useCallback((msg) => {
+    setEventLog(prev => [...prev.slice(-50), { time: new Date().toLocaleTimeString(), msg }]);
+  }, []);
+
+  const loadSample = async () => {
+    if (!selectedSample) return;
+    try {
+      const r = await fetch(`${API}/sample/${selectedSample}`);
+      const d = await r.json();
+      setTranscript(d.transcript_text || '');
+      setTicker(d.ticker || '');
+      setQuarter(d.quarter || '');
+      setLoadedMeta(d.metadata);
+      addLog(`Loaded sample: ${d.ticker} ${d.quarter}`);
+    } catch (e) { addLog(`Error loading sample: ${e.message}`); }
+  };
+
+  const fetchTranscript = async () => {
+    if (!fetchTicker || !fetchQuarter) return;
+    setFetchLoading(true); setFetchError('');
+    try {
+      const r = await fetch(`${API}/fetch-transcript`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: fetchTicker, quarter: fetchQuarter }),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Fetch failed'); }
+      const d = await r.json();
+      setTranscript(d.transcript_text || '');
+      setTicker(d.ticker);
+      setQuarter(fetchQuarter);
+      setLoadedMeta(null);
+      addLog(`Fetched transcript: ${d.ticker} ${fetchQuarter}`);
+    } catch (e) { setFetchError(e.message); addLog(`Fetch error: ${e.message}`); }
+    finally { setFetchLoading(false); }
+  };
+
+  const runAnalysis = async () => {
+    if (!transcript.trim()) return;
+    setAnalyzing(true); setParseResult(null); setSubScores({});
+    setComposite(null); setPriceData(null); setEventLog([]);
+    setSentenceAttributions([]); setBootstrapCIs({}); setShowHeatmap(false);
+    subScoresRef.current = {};
+    addLog('Starting analysis...');
+
+    // Unlock audio during user gesture so TTS autoplay works later
+    if (!ttsMutedRef.current) {
+      const warmup = ttsAudioRef.current || new Audio();
+      ttsAudioRef.current = warmup;
+      warmup.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      warmup.volume = 0;
+      warmup.play().then(() => { warmup.pause(); warmup.volume = 1; }).catch(() => {});
+    }
+    try {
+      const response = await fetch(`${API}/analyze`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, ticker, quarter, earnings_date: earningsDate }),
+      });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        let currentEvent = null;
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith('data:') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(5).trim());
+              switch (currentEvent) {
+                case 'parsing_complete':
+                  setParseResult(data);
+                  addLog(`Parsed: ${data.sentence_count} sentences (${data.section_counts?.prepared} prepared, ${data.section_counts?.qa} Q&A)`);
+                  break;
+                case 'subscore':
+                  setSubScores(prev => {
+                    const updated = { ...prev, [data.name]: data };
+                    subScoresRef.current = updated;
+                    return updated;
+                  });
+                  addLog(`Computed: ${data.name} = ${data.score}`);
+                  // Capture reported_date from earnings surprise — auto-fill date if empty
+                  if (data.name === 'earnings_surprise' && data.reported_date) {
+                    setSignalState(prev => ({ ...(prev || {}), reported_date: data.reported_date }));
+                    if (!earningsDate) setEarningsDate(data.reported_date);
+                  }
+                  break;
+                case 'composite':
+                  setComposite(data);
+                  if (data.bootstrap_cis) setBootstrapCIs(data.bootstrap_cis);
+                  addLog(`Composite signal: ${data.composite_signal} (${data.signal_label})`);
+                  // Store signal state for replay page (merge to preserve reported_date + sub_scores)
+                  setSignalState(prev => ({
+                    ...(prev || {}),
+                    ticker, quarter, earnings_date: earningsDate,
+                    signal_label: data.signal_label,
+                    composite_signal: data.composite_signal,
+                    confidence: data.confidence,
+                    one_line_summary: data.one_line_summary,
+                    calibration: data.calibration,
+                    eps_modifier: data.eps_modifier,
+                    sub_scores: { ...subScoresRef.current },
+                    bootstrap_cis: data.bootstrap_cis || {},
+                  }));
+                  break;
+                case 'attributions':
+                  setSentenceAttributions(data);
+                  addLog(`Sentence attributions: ${data.length} sentences scored`);
+                  break;
+                case 'price_data':
+                  setPriceData(data);
+                  addLog(`Price data loaded for ${data.ticker}`);
+                  // Update signal state with entry price
+                  setSignalState(prev => prev ? { ...prev, entry_price: data.base_price } : prev);
+                  break;
+                case 'done':
+                  addLog('Analysis complete.');
+                  // Trigger TTS voice summary (use ref to avoid stale closure)
+                  if (!ttsMutedRef.current) {
+                    triggerTTS();
+                  }
+                  break;
+                case 'error': addLog(`Error: ${data.error}`); break;
+              }
+            } catch (e) { console.error('SSE parse error:', e, line); }
+            currentEvent = null;
+          }
+        }
+      }
+    } catch (e) { addLog(`Connection error: ${e.message}`); }
+    finally { setAnalyzing(false); }
+  };
+
+  const runBacktest = async () => {
+    setBacktesting(true); setBacktestResult(null); addLog('Running backtest on all samples...');
+    try {
+      const ids = samples.map(s => s.id);
+      const r = await fetch(`${API}/backtest`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sample_ids: ids }),
+      });
+      const d = await r.json();
+      setBacktestResult(d);
+      addLog(`Backtest complete: ${d.total_samples} samples analyzed`);
+    } catch (e) { addLog(`Backtest error: ${e.message}`); }
+    finally { setBacktesting(false); }
+  };
+
+  const triggerTTS = async () => {
+    // Pause any currently playing audio but keep the unlocked element
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+    }
+    stopAutoScroll();
+    setTtsStatus('generating');
+    setTtsScript('');
+    try {
+      const signalPayload = {
+        ticker,
+        signal_label: subScoresRef.current.guidance_hedge ? 'analyzing' : 'NEUTRAL',
+        ...(() => {
+          const ss = subScoresRef.current;
+          const g = ss.guidance_hedge?.score ?? 0;
+          const a = ss.analyst_pressure?.score ?? 0;
+          const m = ss.language_momentum?.score ?? 0;
+          const comp = 0.35 * g + 0.15 * a + 0.50 * m;
+          const clamped = Math.max(-1, Math.min(1, comp));
+          return {
+            composite_signal: Math.round(clamped * 100) / 100,
+            signal_label: clamped >= 0.20 ? 'LONG' : clamped <= -0.20 ? 'SHORT' : 'NEUTRAL',
+          };
+        })(),
+        confidence: 0.5,
+        sub_scores: subScoresRef.current,
+      };
+      const r = await fetch(`${API}/tts/generate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signal_result: signalPayload, ticker, quarter }),
+      });
+      const d = await r.json();
+      if (!d.audio_url) {
+        setTtsStatus('idle');
+        return;
+      }
+      setTtsScript(d.script || '');
+      // Reuse the unlocked Audio element from the user gesture warmup
+      const audio = ttsAudioRef.current || new Audio();
+      ttsAudioRef.current = audio;
+      audio.src = `${API}${d.audio_url}`;
+      audio.volume = 1;
+      audio.onended = () => { setTtsStatus('idle'); setTtsScript(''); stopAutoScroll(); };
+      audio.onerror = () => { setTtsStatus('idle'); setTtsScript(''); stopAutoScroll(); };
+      try {
+        await audio.play();
+        setTtsStatus('playing');
+        addLog('Voice summary playing...');
+        startAutoScroll();
+      } catch (playErr) {
+        // Autoplay blocked — show manual play button
+        setTtsStatus('blocked');
+      }
+    } catch (e) {
+      setTtsStatus('idle');
+    }
+  };
+
+  const startAutoScroll = () => {
+    stopAutoScroll();
+    const panel = centerPanelRef.current;
+    if (!panel) return;
+    const totalScrollable = panel.scrollHeight - panel.clientHeight;
+    if (totalScrollable <= 0) return;
+    const scrollDuration = Math.max(8000, totalScrollable * 25);
+    const startTime = performance.now();
+    const startScroll = panel.scrollTop;
+    const distance = totalScrollable - startScroll;
+    if (distance <= 0) return;
+    setIsAutoScrolling(true);
+    const ease = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    const step = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / scrollDuration, 1);
+      panel.scrollTop = startScroll + distance * ease(progress);
+      if (progress < 1) {
+        autoScrollRef.current = requestAnimationFrame(step);
+      } else {
+        autoScrollRef.current = null;
+        setIsAutoScrolling(false);
+      }
+    };
+    const onUserScroll = () => { stopAutoScroll(); panel.removeEventListener('wheel', onUserScroll); panel.removeEventListener('touchstart', onUserScroll); };
+    panel.addEventListener('wheel', onUserScroll, { once: true, passive: true });
+    panel.addEventListener('touchstart', onUserScroll, { once: true, passive: true });
+    autoScrollRef.current = requestAnimationFrame(step);
+  };
+
+  const stopAutoScroll = () => {
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+    setIsAutoScrolling(false);
+  };
+
+  const playBlockedAudio = () => {
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.play().then(() => { setTtsStatus('playing'); startAutoScroll(); }).catch(() => setTtsStatus('idle'));
+    }
+  };
+
+  const toggleMute = () => {
+    const newVal = !ttsMuted;
+    if (newVal) {
+      // Muting: cancel current audio + scroll (keep element alive for reuse)
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+      }
+      stopAutoScroll();
+      setTtsStatus('idle');
+      setTtsScript('');
+    }
+    setTtsMuted(newVal);
+    ttsMutedRef.current = newVal;
+  };
+
+  const prepareTradePreview = async () => {
+    if (!composite || !ticker) return;
+    if (composite.signal_label === 'NEUTRAL') { addLog('Signal is NEUTRAL -- no trade to execute.'); return; }
+    try {
+      const r = await fetch(`${API}/trading/quote/${ticker}`);
+      const q = await r.json();
+      const confidence = composite.confidence || 0.5;
+      const notional = 2000 * confidence;
+      const qty = Math.max(1, Math.floor(notional / q.mid));
+      setTradePreview({
+        ticker, side: composite.signal_label === 'LONG' ? 'BUY' : 'SELL SHORT',
+        qty, price: q.mid, notional: (qty * q.mid).toFixed(2),
+        signal_label: composite.signal_label, composite_signal: composite.composite_signal, confidence,
+      });
+      setShowConfirm(true);
+    } catch (e) { addLog(`Quote error: ${e.message}`); }
+  };
+
+  const executeTrade = async () => {
+    if (!tradePreview) return;
+    setTradeExecuting(true); setShowConfirm(false); setTradeResult(null);
+    addLog(`Executing ${tradePreview.side} ${tradePreview.qty} ${tradePreview.ticker}...`);
+    try {
+      const r = await fetch(`${API}/trading/execute`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: tradePreview.ticker, signal_label: tradePreview.signal_label, composite_signal: tradePreview.composite_signal, confidence: tradePreview.confidence }),
+      });
+      const d = await r.json();
+      setTradeResult(d);
+      if (d.executed) addLog(`Order filled: ${d.side} ${d.qty} ${d.symbol} @ ~$${d.estimated_price}`);
+      else addLog(`Trade not executed: ${d.reason}`);
+      refreshTrading();
+    } catch (e) { addLog(`Trade error: ${e.message}`); setTradeResult({ executed: false, reason: e.message }); }
+    finally { setTradeExecuting(false); }
+  };
+
+  const closePosition = async (symbol) => {
+    addLog(`Closing position in ${symbol}...`);
+    try {
+      const r = await fetch(`${API}/trading/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol }) });
+      const d = await r.json();
+      addLog(d.message || `Closed ${symbol}`);
+      refreshTrading();
+    } catch (e) { addLog(`Close error: ${e.message}`); }
+  };
+
+  return (
+    <div className="flex-1 flex overflow-hidden">
+      {/* LEFT PANEL */}
+      <div className="w-1/4 border-r border-white/[0.04] flex flex-col overflow-y-auto p-5 space-y-5 bg-slate-900/30">
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Sample Transcripts</h3>
+          <select value={selectedSample} onChange={e => setSelectedSample(e.target.value)}
+            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none">
+            <option value="">Select a sample...</option>
+            {samples.map(s => (
+              <option key={s.id} value={s.id}>{s.ticker} {s.quarter} ({s.known_outcome_5d_pct > 0 ? '+' : ''}{s.known_outcome_5d_pct}%)</option>
+            ))}
+          </select>
+          <button onClick={loadSample} disabled={!selectedSample}
+            className="w-full px-3 py-2 bg-white/[0.06] hover:bg-white/[0.1] disabled:bg-white/[0.02] disabled:text-slate-600 rounded-xl text-sm font-medium transition-all">Load Sample</button>
+          {loadedMeta && (
+            <div className={`text-xs p-2 rounded border ${loadedMeta.known_outcome_5d_pct > 0 ? 'border-green-600 bg-green-900/30 text-green-300' : 'border-red-600 bg-red-900/30 text-red-300'}`}>
+              Known 5d outcome: {loadedMeta.known_outcome_5d_pct > 0 ? '+' : ''}{loadedMeta.known_outcome_5d_pct}%
+              <br /><span className="text-slate-400">{loadedMeta.description}</span>
+            </div>
+          )}
+        </div>
+        <div className="space-y-2 border-t border-white/[0.04] pt-5">
+          <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Live Fetch</h3>
+          <input type="text" placeholder="Ticker (e.g. GOOGL)" value={fetchTicker} onChange={e => setFetchTicker(e.target.value.toUpperCase())}
+            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-1.5 text-sm focus:border-sky-400/40 focus:outline-none" />
+          <input type="text" placeholder="Quarter (e.g. 2024Q1)" value={fetchQuarter} onChange={e => setFetchQuarter(e.target.value.toUpperCase())}
+            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-1.5 text-sm focus:border-sky-400/40 focus:outline-none" />
+          <button onClick={fetchTranscript} disabled={fetchLoading || !fetchTicker || !fetchQuarter}
+            className="w-full px-3 py-2 bg-white/[0.06] hover:bg-white/[0.1] disabled:bg-white/[0.02] disabled:text-slate-600 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2">
+            {fetchLoading ? <><Spinner size="w-3 h-3" /> Fetching...</> : 'Fetch Transcript'}
+          </button>
+          {fetchError && <p className="text-xs text-red-400">{fetchError}</p>}
+        </div>
+        <div className="space-y-2 border-t border-white/[0.04] pt-5 flex-1 flex flex-col">
+          <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Transcript</h3>
+          <textarea value={transcript} onChange={e => setTranscript(e.target.value)}
+            placeholder="Paste earnings call transcript here or load a sample above..."
+            className="flex-1 min-h-[200px] w-full bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 text-xs mono focus:border-sky-400/40 focus:outline-none" />
+          <div className="flex gap-2">
+            <input type="text" placeholder="Ticker" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+              className="w-1/2 bg-white/[0.04] border border-white/[0.06] rounded-xl px-2 py-1 text-xs focus:border-sky-400/40 focus:outline-none" />
+            <input type="date" value={earningsDate} onChange={e => setEarningsDate(e.target.value)}
+              className="w-1/2 bg-white/[0.04] border border-white/[0.06] rounded-xl px-2 py-1 text-xs focus:border-sky-400/40 focus:outline-none" />
+          </div>
+          <button onClick={runAnalysis} disabled={analyzing || !transcript.trim()}
+            className={`w-full px-4 py-3 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+              analyzing ? 'bg-sky-800/60 text-sky-300 shimmer' : 'bg-gradient-to-b from-sky-400 to-sky-500 hover:from-sky-300 hover:to-sky-400 text-white glow-pulse shadow-lg shadow-sky-500/20'
+            } disabled:bg-white/[0.04] disabled:text-slate-600 disabled:shadow-none disabled:animate-none disabled:from-transparent disabled:to-transparent`}>
+            {analyzing ? <><Spinner /> Analyzing...</> : 'Analyze Transcript'}
+          </button>
+        </div>
+      </div>
+
+      {/* CENTER PANEL */}
+      <div className={`w-[45%] scroll-blur-wrap ${isAutoScrolling ? 'scroll-blur-active' : ''}`}>
+      <div ref={centerPanelRef} className="h-full flex flex-col overflow-y-auto p-5 space-y-5">
+        <div className={`rounded-2xl p-8 transition-all duration-700 ${composite ? 'glass-panel premium-shadow-lg ring-1 ring-white/[0.06]' : 'bg-white/[0.02] ring-1 ring-white/[0.04]'}`}>
+          <div className="flex items-center justify-center mb-2 relative">
+            <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Composite Signal</h3>
+            <button onClick={toggleMute} title={ttsMuted ? 'Voice summary muted' : 'Mute voice summary'}
+              className="absolute right-0 top-0 p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors group">
+              {ttsMuted ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ttsStatus === 'playing' ? '#38bdf8' : '#64748b'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              )}
+            </button>
+          </div>
+          <SignalGauge score={composite ? composite.composite_signal : 0} label={composite ? composite.signal_label : ''} confidence={composite ? composite.confidence : null} />
+        </div>
+        <div className="space-y-0">
+          {subScores.earnings_surprise && <SubScoreBar name="earnings_surprise" data={subScores.earnings_surprise} visible={true} />}
+          <SubScoreBar name="guidance_hedge" data={subScores.guidance_hedge} visible={!!subScores.guidance_hedge} ci={bootstrapCIs.guidance_hedge} />
+          <SubScoreBar name="analyst_pressure" data={subScores.analyst_pressure} visible={!!subScores.analyst_pressure} />
+          <SubScoreBar name="language_momentum" data={subScores.language_momentum} visible={!!subScores.language_momentum} ci={bootstrapCIs.language_momentum} />
+        </div>
+        {composite && (
+          <div className="fade-in bg-gradient-to-r from-sky-500/[0.06] to-transparent rounded-2xl p-4 ring-1 ring-sky-400/10">
+            <div className="flex items-start gap-2">
+              <div className="w-1 h-full min-h-[16px] bg-cyan-500 rounded-full flex-shrink-0 mt-0.5"></div>
+              <div className="flex-1">
+                <p className="text-sm text-cyan-200 font-medium leading-relaxed">{composite.one_line_summary}</p>
+                {ttsScript && ttsStatus === 'playing' && (
+                  <p className="text-xs text-slate-400 italic mt-2 leading-relaxed" style={{ animation: 'fadeSlideIn 0.4s ease-out' }}>"{ttsScript}"</p>
+                )}
+              </div>
+            </div>
+            {/* TTS status pill */}
+            {ttsStatus === 'generating' && (
+              <div className="flex items-center gap-2 mt-3 justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>
+                <span className="text-[11px] text-cyan-400/70 font-medium">Generating voice summary...</span>
+              </div>
+            )}
+            {ttsStatus === 'playing' && (
+              <div className="flex items-center gap-2 mt-3 justify-center">
+                <div className="flex items-end gap-[2px] h-4">
+                  <div className="w-[3px] bg-cyan-400 rounded-full eq-bar-1"></div>
+                  <div className="w-[3px] bg-cyan-400 rounded-full eq-bar-2"></div>
+                  <div className="w-[3px] bg-cyan-400 rounded-full eq-bar-3"></div>
+                </div>
+                <span className="text-[11px] text-cyan-400/70 font-medium">Reading analysis...</span>
+              </div>
+            )}
+            {ttsStatus === 'blocked' && (
+              <div className="flex items-center gap-2 mt-3 justify-center">
+                <button onClick={playBlockedAudio}
+                  className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 rounded-full text-[11px] font-bold text-white flex items-center gap-1.5 transition-colors">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Play Summary
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Calibration Context Card — uses live backtest data when available */}
+        {composite && composite.calibration && (() => {
+          const cal = composite.calibration;
+          const bucket = cal.bucket;
+          // Look up live calibration from backtest if available
+          const liveKey = bucket === 'strong' ? (composite.composite_signal > 0 ? 'strong_long' : 'strong_short')
+            : bucket === 'moderate' ? (composite.composite_signal > 0 ? 'weak_long' : 'weak_short')
+            : bucket === 'weak' ? (composite.composite_signal > 0 ? 'weak_long' : 'weak_short')
+            : 'neutral';
+          const live = backtestResult?.live_calibration?.[liveKey];
+          const dispAccuracy = live?.accuracy != null ? (live.accuracy * 100).toFixed(0) + '%' : cal.historical_accuracy;
+          const dispReturn = live?.avg_return != null ? (live.avg_return > 0 ? '+' : '') + live.avg_return + '%' : cal.expected_move;
+          const isLive = live?.accuracy != null;
+          return (
+            <div className="fade-in rounded-xl overflow-hidden border border-purple-700/40 shadow-lg shadow-purple-900/10">
+              <div className="bg-gradient-to-r from-purple-900/40 via-cyan-900/30 to-purple-900/40 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></div>
+                  <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Calibration</span>
+                  {isLive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 font-bold">LIVE</span>}
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide ${
+                  bucket === 'strong' ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                  : bucket === 'moderate' ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'
+                  : 'bg-slate-700/50 text-slate-400 border border-slate-600/50'
+                }`}>{bucket}</span>
+              </div>
+              <div className="bg-slate-800/60 px-4 py-3 space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-white/[0.03] rounded-xl p-3 text-center ring-1 ring-white/[0.05]">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">{isLive ? 'Avg Return' : 'Expected'}</div>
+                  <div className="text-base font-black mono text-cyan-400 mt-0.5">{dispReturn}</div>
+                </div>
+                <div className="bg-white/[0.03] rounded-xl p-3 text-center ring-1 ring-white/[0.05]">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">{isLive ? 'Accuracy' : 'Hist. Acc.'}</div>
+                  <div className="text-base font-black mono text-purple-400 mt-0.5">{dispAccuracy}</div>
+                </div>
+                <div className="bg-white/[0.03] rounded-xl p-3 text-center ring-1 ring-white/[0.05]">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">Window</div>
+                  <div className="text-base font-black mono text-slate-300 mt-0.5">{cal.suggested_window || '—'}</div>
+                </div>
+              </div>
+              {isLive && live.count != null && (
+                <div className="text-xs text-slate-500 text-center">Based on {live.count} backtest sample{live.count !== 1 ? 's' : ''} in this bucket</div>
+              )}
+              {composite.eps_modifier != null && composite.eps_modifier !== 0 && (
+                <div className={`text-xs px-2 py-1.5 rounded ${composite.eps_modifier > 0 ? 'bg-green-900/20 text-green-400 border border-green-800' : 'bg-red-900/20 text-red-400 border border-red-800'}`}>
+                  EPS {composite.eps_modifier > 0 ? 'confirms' : 'contradicts'} signal direction — confidence {composite.eps_modifier > 0 ? '+' : ''}{(composite.eps_modifier * 100).toFixed(1)}%
+                </div>
+              )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Sentence Attribution Heatmap */}
+        {sentenceAttributions.length > 0 && (
+          <div className="fade-in">
+            <button onClick={() => setShowHeatmap(!showHeatmap)}
+              className="w-full text-left px-4 py-2.5 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.05] hover:ring-white/[0.1] transition-all flex items-center justify-between group">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-0.5">
+                  <div className="w-2 h-2 rounded-sm bg-green-500/60"></div>
+                  <div className="w-2 h-2 rounded-sm bg-red-500/60"></div>
+                  <div className="w-2 h-2 rounded-sm bg-green-500/30"></div>
+                </div>
+                <span className="text-xs font-semibold text-slate-300">Transcript Heatmap</span>
+                <span className="text-[10px] text-slate-500">({sentenceAttributions.length} sentences)</span>
+              </div>
+              <span className="text-xs text-slate-500 group-hover:text-slate-400 transition-colors">{showHeatmap ? 'Collapse' : 'Expand'}</span>
+            </button>
+            {showHeatmap && (
+              <div className="mt-2 bg-black/20 rounded-2xl ring-1 ring-white/[0.04] p-5 max-h-72 overflow-y-auto leading-relaxed">
+                {sentenceAttributions.map((s, i) => {
+                  const intensity = Math.min(1, Math.abs(s.s) * 8);
+                  const bg = s.s > 0.01
+                    ? `rgba(16, 185, 129, ${intensity * 0.35})`
+                    : s.s < -0.01
+                    ? `rgba(239, 68, 68, ${intensity * 0.35})`
+                    : 'transparent';
+                  const border = s.s > 0.01
+                    ? `rgba(16, 185, 129, ${intensity * 0.15})`
+                    : s.s < -0.01
+                    ? `rgba(239, 68, 68, ${intensity * 0.15})`
+                    : 'transparent';
+                  return (
+                    <span key={i} className="text-xs inline cursor-default hover:opacity-80 transition-opacity" style={{ background: bg, padding: '2px 3px', borderRadius: '3px', borderBottom: `2px solid ${border}` }}
+                      title={`Score: ${s.s.toFixed(4)}`}>
+                      {s.t}{' '}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Simulate Entry button — appears when signal is LONG or SHORT */}
+        {composite && composite.signal_label !== 'NEUTRAL' && ticker && (
+          <button onClick={() => {
+            // Calculate TP/SL from signal strength + confidence
+            const absSignal = Math.abs(composite.composite_signal);
+            const conf = composite.confidence || 0.5;
+            let baseTp, baseSl;
+            if (absSignal >= 0.5) { baseTp = 12; baseSl = 4; }
+            else if (absSignal >= 0.35) { baseTp = 8; baseSl = 5; }
+            else { baseTp = 5; baseSl = 5; }
+            // Confidence scales: high conf → wider TP, tighter SL
+            const calcTp = Math.round(baseTp * (0.8 + conf * 0.4) * 10) / 10;
+            const calcSl = Math.round(baseSl * (1.2 - conf * 0.4) * 10) / 10;
+            setSignalState(prev => ({ ...prev, autoStart: true, calculated_tp: calcTp, calculated_sl: calcSl }));
+            navigateTo('replay');
+          }}
+            className={`fade-in w-full px-4 py-3.5 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+              composite.signal_label === 'LONG'
+                ? 'bg-gradient-to-b from-emerald-400 to-emerald-500 hover:from-emerald-300 hover:to-emerald-400 text-white shadow-lg shadow-emerald-500/20'
+                : 'bg-gradient-to-b from-rose-400 to-rose-500 hover:from-rose-300 hover:to-rose-400 text-white shadow-lg shadow-rose-500/20'
+            }`}>
+            {composite.signal_label === 'LONG' ? 'Simulate BUY Entry' : 'Simulate SHORT Entry'} {ticker} &rarr;
+          </button>
+        )}
+
+        <div className="mt-auto">
+          <div className="flex items-center gap-2 mb-1.5">
+            {analyzing && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>}
+            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Processing Feed</h4>
+          </div>
+          <div ref={logRef} className="bg-black/20 rounded-xl ring-1 ring-white/[0.04] p-3 h-28 overflow-y-auto mono text-xs">
+            {eventLog.length === 0 && <p className="text-slate-600 italic">Waiting for analysis...</p>}
+            {eventLog.map((e, i) => (
+              <div key={i} className="text-slate-400 py-0.5"><span className="text-slate-600 mr-1.5">{e.time}</span>{e.msg}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+      </div>
+
+      {/* RIGHT PANEL */}
+      <div className="w-[30%] border-l border-white/[0.04] flex flex-col overflow-y-auto p-5 space-y-5 bg-slate-900/20">
+        <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow">
+          <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em] mb-3">Price Action</h3>
+          {priceData && priceData.daily_series ? (
+            <div>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={priceData.daily_series}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="day" stroke="#64748b" fontSize={10} label={{ value: 'Days from Earnings', position: 'insideBottom', offset: -5, style: { fill: '#64748b', fontSize: 10 } }} />
+                  <YAxis stroke="#64748b" fontSize={10} domain={['auto', 'auto']} />
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8, fontSize: 12 }} />
+                  <ReferenceLine x={0} stroke="#06b6d4" strokeDasharray="3 3" label={{ value: 'Earnings', fill: '#06b6d4', fontSize: 10 }} />
+                  <Line type="monotone" dataKey="close" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {[{ k: 'day_1', l: '1D' }, { k: 'day_5', l: '5D' }, { k: 'day_20', l: '20D' }].map(({ k, l }) => {
+                  const d = priceData[k];
+                  if (!d) return <div key={k} className="text-center text-xs text-slate-600">{l}: N/A</div>;
+                  return (
+                    <div key={k} className={`text-center p-1.5 rounded ${d.pct_change > 0 ? 'bg-green-900/30' : 'bg-red-900/30'}`}>
+                      <div className="text-xs text-slate-400">{l}</div>
+                      <div className={`text-sm font-bold mono ${d.pct_change > 0 ? 'text-green-400' : 'text-red-400'}`}>{d.pct_change > 0 ? '+' : ''}{d.pct_change}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="h-[140px] flex items-center justify-center text-slate-600 text-sm">
+              {analyzing ? 'Loading price data...' : 'Run analysis with ticker + date for price overlay'}
+            </div>
+          )}
+        </div>
+
+        {/* TRADING PANEL */}
+        <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Paper Trading</h3>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${alpacaConnected ? 'bg-green-900/50 text-green-400 border border-green-700' : 'bg-red-900/50 text-red-400 border border-red-700'}`}>
+              {alpacaConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+          {!alpacaConnected ? (
+            <div className="text-xs text-slate-500 space-y-2">
+              <p>Add Alpaca paper trading keys to <span className="mono text-slate-400">.env</span>:</p>
+              <pre className="bg-slate-900 rounded p-2 mono text-slate-400 text-xs">ALPACA_API_KEY=PKxxx{'\n'}ALPACA_SECRET_KEY=xxx</pre>
+              <button onClick={refreshTrading} className="text-cyan-400 hover:text-cyan-300 text-xs underline">Retry connection</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {alpacaAccount && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Equity</div><div className="text-sm font-bold mono text-slate-200">${alpacaAccount.equity.toLocaleString()}</div></div>
+                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Buying Power</div><div className="text-sm font-bold mono text-slate-200">${alpacaAccount.buying_power.toLocaleString()}</div></div>
+                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Day P&L</div><div className={`text-sm font-bold mono ${alpacaAccount.day_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{alpacaAccount.day_pnl >= 0 ? '+' : ''}${alpacaAccount.day_pnl.toLocaleString()}</div></div>
+                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Cash</div><div className="text-sm font-bold mono text-slate-200">${alpacaAccount.cash.toLocaleString()}</div></div>
+                </div>
+              )}
+              {composite && ticker && composite.signal_label !== 'NEUTRAL' && (
+                <button onClick={prepareTradePreview} disabled={tradeExecuting}
+                  className={`w-full px-3 py-2 rounded font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                    composite.signal_label === 'LONG' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+                  } disabled:bg-slate-600`}>
+                  {tradeExecuting ? <><Spinner size="w-4 h-4" /> Executing...</> : <>Execute {composite.signal_label === 'LONG' ? 'BUY' : 'SHORT'} {ticker}</>}
+                </button>
+              )}
+              {composite && composite.signal_label === 'NEUTRAL' && (
+                <div className="text-xs text-yellow-400 bg-yellow-900/20 rounded p-2 border border-yellow-800">Signal is NEUTRAL -- no trade recommendation.</div>
+              )}
+              {!composite && <div className="text-xs text-slate-500 text-center py-2">Run analysis first to generate a trade signal.</div>}
+              {showConfirm && tradePreview && (
+                <div className="bg-slate-900 rounded-lg p-3 border border-cyan-700 space-y-2 fade-in">
+                  <div className="text-xs font-semibold text-cyan-400 uppercase">Confirm Order</div>
+                  <div className="text-sm text-slate-200">
+                    <span className={`font-bold ${tradePreview.side === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{tradePreview.side}</span>
+                    {' '}<span className="font-bold">{tradePreview.qty}</span> shares of <span className="font-bold">{tradePreview.ticker}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-xs text-slate-400">
+                    <span>Est. Price:</span><span className="mono text-slate-300">${tradePreview.price}</span>
+                    <span>Est. Notional:</span><span className="mono text-slate-300">${tradePreview.notional}</span>
+                    <span>Signal:</span><span className="mono text-slate-300">{tradePreview.composite_signal}</span>
+                    <span>Confidence:</span><span className="mono text-slate-300">{(tradePreview.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={executeTrade} className={`flex-1 py-1.5 rounded text-xs font-bold ${tradePreview.side === 'BUY' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'} text-white`}>Confirm</button>
+                    <button onClick={() => setShowConfirm(false)} className="flex-1 py-1.5 rounded text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-300">Cancel</button>
+                  </div>
+                </div>
+              )}
+              {tradeResult && (
+                <div className={`fade-in text-xs rounded p-2 border ${tradeResult.executed ? 'border-green-700 bg-green-900/20 text-green-300' : 'border-red-700 bg-red-900/20 text-red-300'}`}>
+                  {tradeResult.executed ? (
+                    <div className="space-y-1">
+                      <div className="font-bold">Order Submitted</div>
+                      <div className="mono">{tradeResult.side.toUpperCase()} {tradeResult.qty} {tradeResult.symbol}</div>
+                      <div className="text-slate-400">Status: {tradeResult.status} | ~${tradeResult.estimated_notional}</div>
+                    </div>
+                  ) : <div>{tradeResult.reason}</div>}
+                </div>
+              )}
+              {positions.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Positions</div>
+                  <div className="space-y-1">
+                    {positions.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-slate-700/30 rounded px-2 py-1.5">
+                        <div><span className="font-bold text-slate-200">{p.symbol}</span><span className="text-slate-500 ml-1">{p.qty} @ ${p.avg_entry.toFixed(2)}</span></div>
+                        <div className="flex items-center gap-2">
+                          <span className={`mono font-bold ${p.unrealized_pl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{p.unrealized_pl >= 0 ? '+' : ''}${p.unrealized_pl.toFixed(2)}</span>
+                          <button onClick={() => closePosition(p.symbol)} className="px-1.5 py-0.5 bg-red-800 hover:bg-red-700 rounded text-red-200 text-xs">Close</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {orders.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Recent Orders</div>
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {orders.slice(0, 5).map((o, i) => (
+                      <div key={i} className="text-xs bg-slate-700/20 rounded px-2 py-1 flex justify-between">
+                        <span><span className={o.side === 'buy' ? 'text-green-400' : 'text-red-400'}>{o.side.toUpperCase()}</span> {o.qty} {o.symbol}</span>
+                        <span className={`mono ${o.status === 'filled' ? 'text-green-400' : o.status === 'new' || o.status === 'accepted' ? 'text-yellow-400' : 'text-slate-500'}`}>{o.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={refreshTrading} className="text-xs text-cyan-400 hover:text-cyan-300 underline">Refresh</button>
+            </div>
+          )}
+        </div>
+
+        {/* Signal Validation — current analysis only */}
+        {composite && priceData && (
+          <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+              <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Signal Validation</h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">{ticker}</span>
+            </div>
+            {(() => {
+              const sig = composite.composite_signal;
+              const label = composite.signal_label;
+              const d1 = priceData.day_1;
+              const d5 = priceData.day_5;
+              const d20 = priceData.day_20;
+              const isCorrect1d = d1 && ((label === 'LONG' && d1.pct_change > 0) || (label === 'SHORT' && d1.pct_change < 0));
+              const isCorrect5d = d5 && ((label === 'LONG' && d5.pct_change > 0) || (label === 'SHORT' && d5.pct_change < 0));
+              const isCorrect20d = d20 && ((label === 'LONG' && d20.pct_change > 0) || (label === 'SHORT' && d20.pct_change < 0));
+              const isNeutral = label === 'NEUTRAL';
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 ring-1 ring-white/[0.05]">
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase">Signal</div>
+                      <div className={`text-lg font-black mono ${sig > 0 ? 'text-green-400' : sig < 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+                        {label} {sig > 0 ? '+' : ''}{sig.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] text-slate-500 uppercase">Confidence</div>
+                      <div className="text-lg font-black mono text-cyan-400">{((composite.confidence ?? 0) * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[{ d: d1, l: '1D', correct: isCorrect1d }, { d: d5, l: '5D', correct: isCorrect5d }, { d: d20, l: '20D', correct: isCorrect20d }].map(({ d, l, correct }) => (
+                      <div key={l} className={`rounded-xl p-2.5 text-center ring-1 ${
+                        !d ? 'ring-white/[0.04] bg-white/[0.02]'
+                        : isNeutral ? 'ring-white/[0.06] bg-white/[0.03]'
+                        : correct ? 'ring-green-500/20 bg-green-500/5' : 'ring-red-500/20 bg-red-500/5'
+                      }`}>
+                        <div className="text-[10px] text-slate-500 uppercase">{l}</div>
+                        {d ? (
+                          <>
+                            <div className={`text-sm font-black mono ${d.pct_change > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {d.pct_change > 0 ? '+' : ''}{d.pct_change}%
+                            </div>
+                            {!isNeutral && <div className={`text-[10px] font-bold mt-0.5 ${correct ? 'text-green-400' : 'text-red-400'}`}>{correct ? 'Correct' : 'Wrong'}</div>}
+                          </>
+                        ) : (
+                          <div className="text-xs text-slate-600 mono">N/A</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {d5 && !isNeutral && (
+                    <div className={`text-center text-xs font-bold px-3 py-2 rounded-xl ${
+                      isCorrect5d ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    }`}>
+                      {isCorrect5d ? 'Signal correctly predicted 5-day direction' : 'Signal direction was incorrect at 5 days'}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Full Backtest (all samples) — manual only */}
+        <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">System Backtest</h3>
+            <button onClick={runBacktest} disabled={backtesting || samples.length === 0}
+              className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 rounded-lg text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-sm shadow-purple-900/30">
+              {backtesting ? <><Spinner size="w-3 h-3" /> Running...</> : 'Run on All Samples'}
+            </button>
+          </div>
+          {backtestResult ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { l: 'Accuracy', v: backtestResult.bullish_accuracy != null ? (backtestResult.bullish_accuracy * 100).toFixed(0) + '%' : 'N/A', c: 'text-green-400' },
+                  { l: 'Sharpe', v: backtestResult.sharpe_proxy != null ? backtestResult.sharpe_proxy.toFixed(2) : 'N/A', c: 'text-cyan-400' },
+                  { l: 'Samples', v: backtestResult.total_samples, c: 'text-slate-300' },
+                ].map(({ l, v, c }, i) => (
+                  <div key={i} className="bg-white/[0.03] rounded-xl p-2.5 text-center ring-1 ring-white/[0.05]"><div className="text-[10px] text-slate-500 uppercase tracking-wide">{l}</div><div className={`text-sm font-black mono ${c} mt-0.5`}>{v}</div></div>
+                ))}
+              </div>
+
+              {backtestResult.baseline_comparison && (
+                <div className="rounded-xl overflow-hidden border border-purple-700/30">
+                  <div className="bg-gradient-to-r from-purple-900/30 to-cyan-900/20 px-3 py-2 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                    <h4 className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">NLP vs Keyword Baseline</h4>
+                  </div>
+                  <div className="bg-slate-900/40 p-3 space-y-1.5">
+                    <div className="grid grid-cols-3 gap-2 bg-cyan-500/10 rounded-lg p-2 border border-cyan-500/20">
+                      <div className="text-xs font-bold text-cyan-400 flex items-center gap-1.5"><div className="w-1 h-3 bg-cyan-500 rounded-full"></div>NLP</div>
+                      <div className="text-xs font-black mono text-center text-cyan-300">{backtestResult.baseline_comparison.nlp_accuracy != null ? (backtestResult.baseline_comparison.nlp_accuracy * 100).toFixed(0) + '%' : 'N/A'}</div>
+                      <div className="text-xs font-black mono text-center text-cyan-300">{backtestResult.baseline_comparison.nlp_sharpe ?? 'N/A'}</div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 bg-slate-700/20 rounded-lg p-2 border border-slate-700/30">
+                      <div className="text-xs text-slate-400 flex items-center gap-1.5"><div className="w-1 h-3 bg-slate-500 rounded-full"></div>Keywords</div>
+                      <div className="text-xs mono text-center text-slate-400">{backtestResult.baseline_comparison.keyword_accuracy != null ? (backtestResult.baseline_comparison.keyword_accuracy * 100).toFixed(0) + '%' : 'N/A'}</div>
+                      <div className="text-xs mono text-center text-slate-400">{backtestResult.baseline_comparison.keyword_sharpe ?? 'N/A'}</div>
+                    </div>
+                    {backtestResult.baseline_comparison.lift != null && (
+                      <div className={`text-center text-xs font-black px-2.5 py-1.5 rounded-lg ${backtestResult.baseline_comparison.lift > 0 ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                        NLP lift: {backtestResult.baseline_comparison.lift > 0 ? '+' : ''}{(backtestResult.baseline_comparison.lift * 100).toFixed(0)}pp
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {backtestResult.ablation && (
+                <div className="rounded-xl overflow-hidden border border-cyan-700/30">
+                  <div className="bg-gradient-to-r from-cyan-900/30 to-slate-900/20 px-3 py-2 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
+                    <h4 className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">Ablation Study</h4>
+                  </div>
+                  <div className="bg-slate-900/40 p-3 space-y-1">
+                    {Object.entries(backtestResult.ablation).map(([factor, data]) => {
+                      const labels = { guidance_hedge: 'Guidance (35%)', analyst_pressure: 'Analyst (15%)', language_momentum: 'Language (50%)', earnings_surprise: 'EPS Surprise', composite: 'Composite' };
+                      const isComposite = factor === 'composite';
+                      const accPct = data.accuracy != null ? data.accuracy * 100 : 0;
+                      return (
+                        <div key={factor} className={`flex items-center justify-between text-xs rounded-lg px-2.5 py-2 transition-colors ${isComposite ? 'bg-cyan-500/10 border border-cyan-500/20' : 'bg-slate-700/20 hover:bg-slate-700/30'}`}>
+                          <span className={isComposite ? 'font-bold text-cyan-300' : 'text-slate-300'}>{labels[factor] || factor}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${accPct}%`, background: accPct >= 70 ? '#10b981' : accPct >= 50 ? '#f59e0b' : '#ef4444' }}></div>
+                            </div>
+                            <span className={`mono font-black w-8 text-right ${data.accuracy != null ? (data.accuracy >= 0.7 ? 'text-green-400' : data.accuracy >= 0.5 ? 'text-yellow-400' : 'text-red-400') : 'text-slate-500'}`}>
+                              {data.accuracy != null ? (data.accuracy * 100).toFixed(0) + '%' : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {backtestResult.individual_results && (
+                <div>
+                  <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Individual Signals</h4>
+                  <div className="space-y-1">
+                    {backtestResult.individual_results.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-slate-700/20 rounded-lg px-2.5 py-1.5 hover:bg-slate-700/30 transition-colors">
+                        <span className="font-semibold text-slate-300 w-20">{r.ticker} {r.quarter}</span>
+                        <span className={`mono font-bold ${r.signal >= 0.20 ? 'text-green-400' : r.signal <= -0.20 ? 'text-red-400' : 'text-yellow-400'}`}>{r.signal > 0 ? '+' : ''}{r.signal}</span>
+                        <span className={`mono font-bold ${r.actual_5d_pct > 0 ? 'text-green-400' : 'text-red-400'}`}>{r.actual_5d_pct > 0 ? '+' : ''}{r.actual_5d_pct}%</span>
+                        <span className={`w-2 h-2 rounded-full ${r.neutral ? 'bg-yellow-500' : r.correct ? 'bg-green-500 shadow-sm shadow-green-500/30' : 'bg-red-500 shadow-sm shadow-red-500/30'}`}></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="h-16 flex items-center justify-center text-slate-600 text-xs">
+              {backtesting ? <><Spinner /> Running backtest on all samples...</> : 'Run backtest to validate system accuracy across all samples'}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== PAGE 2: REPLAY SIMULATOR =====================
+
+function ReplaySimulatorPage({ signalState, setSignalState }) {
+  // Trade setup inputs
+  const [replayTicker, setReplayTicker] = useState('');
+  const [entryDate, setEntryDate] = useState('');
+  const [direction, setDirection] = useState('LONG');
+  const [entryPrice, setEntryPrice] = useState('');
+  const [positionSize, setPositionSize] = useState(1000);
+  const [stopLossPct, setStopLossPct] = useState(5);
+  const [takeProfitPct, setTakeProfitPct] = useState(10);
+  const [interval, setInterval_] = useState('1d');
+  const [replayWindow, setReplayWindow] = useState(20);
+
+  // Replay state
+  const [candles, setCandles] = useState([]);
+  const [replayActive, setReplayActive] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [entryIdx, setEntryIdx] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // P&L state
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [pnl, setPnl] = useState(0);
+  const [pnlPct, setPnlPct] = useState(0);
+  const [maxFav, setMaxFav] = useState(0);
+  const [maxAdv, setMaxAdv] = useState(0);
+  const [status, setStatus] = useState('IDLE'); // IDLE, OPEN, STOPPED_OUT, TARGET_HIT, EXPIRED
+  const [exitPrice, setExitPrice] = useState(null);
+  const [exitReason, setExitReason] = useState('');
+  const [exitIdx, setExitIdx] = useState(null);
+
+  // Chart refs
+  const chartContainerRef = useRef(null);
+  const chartRef = useRef(null);
+  const seriesRef = useRef(null);
+  const timerRef = useRef(null);
+
+  // Load from signal state
+  const loadFromSignal = useCallback(() => {
+    if (!signalState) return;
+    setReplayTicker(signalState.ticker || '');
+    setDirection(signalState.signal_label === 'SHORT' ? 'SHORT' : 'LONG');
+    if (signalState.entry_price) setEntryPrice(String(signalState.entry_price));
+    // Use reported_date (actual earnings report date) or earnings_date
+    const eDate = signalState.reported_date || signalState.earnings_date || '';
+    if (eDate) setEntryDate(eDate);
+    // Apply signal-calculated TP/SL
+    if (signalState.calculated_tp) setTakeProfitPct(signalState.calculated_tp);
+    if (signalState.calculated_sl) setStopLossPct(signalState.calculated_sl);
+  }, [signalState]);
+
+  // Auto-start: when arriving from analysis page with autoStart flag
+  const autoStartDone = useRef(false);
+  const pendingAutoStart = useRef(false);
+  useEffect(() => {
+    if (signalState?.autoStart && !autoStartDone.current) {
+      autoStartDone.current = true;
+      loadFromSignal();
+      pendingAutoStart.current = true;
+      // Clear the autoStart flag
+      setSignalState(prev => prev ? { ...prev, autoStart: false } : prev);
+    }
+  }, [signalState, loadFromSignal, setSignalState]);
+
+  // Trigger startReplay once form state has settled from auto-fill
+  useEffect(() => {
+    if (pendingAutoStart.current && replayTicker && entryDate) {
+      pendingAutoStart.current = false;
+      // Small delay to let chart initialize
+      const t = setTimeout(() => startReplay(), 300);
+      return () => clearTimeout(t);
+    }
+  }, [replayTicker, entryDate]);
+
+  // Compute derived values
+  const qty = useMemo(() => {
+    const ep = parseFloat(entryPrice);
+    if (!ep || ep <= 0) return 0;
+    return Math.max(1, Math.floor(positionSize / ep));
+  }, [positionSize, entryPrice]);
+
+  const stopPrice = useMemo(() => {
+    const ep = parseFloat(entryPrice);
+    if (!ep) return 0;
+    return direction === 'LONG' ? ep * (1 - stopLossPct / 100) : ep * (1 + stopLossPct / 100);
+  }, [entryPrice, stopLossPct, direction]);
+
+  const targetPrice = useMemo(() => {
+    const ep = parseFloat(entryPrice);
+    if (!ep) return 0;
+    return direction === 'LONG' ? ep * (1 + takeProfitPct / 100) : ep * (1 - takeProfitPct / 100);
+  }, [entryPrice, takeProfitPct, direction]);
+
+  // Initialize chart
+  useEffect(() => {
+    if (!chartContainerRef.current || typeof LightweightCharts === 'undefined') return;
+
+    const chart = LightweightCharts.createChart(chartContainerRef.current, {
+      width: chartContainerRef.current.clientWidth,
+      height: 420,
+      layout: { background: { color: '#0c1018' }, textColor: '#64748b' },
+      grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#334155' },
+      timeScale: { borderColor: '#334155', timeVisible: interval === '1h' },
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    });
+
+    chartRef.current = chart;
+    seriesRef.current = series;
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    };
+  }, []);
+
+  // Start replay
+  const startReplay = async () => {
+    if (!replayTicker || !entryDate) { setError('Ticker and entry date are required.'); return; }
+    setError(''); setLoading(true); setReplayActive(false); setPlaying(false);
+    setStatus('IDLE'); setExitPrice(null); setExitReason(''); setExitIdx(null);
+    setMaxFav(0); setMaxAdv(0);
+
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    try {
+      // Calculate date range: 5 context candles before entry + replay window after
+      const entryDt = new Date(entryDate + 'T00:00:00');
+      const contextDays = interval === '1h' ? 3 : 10;
+      const windowDays = interval === '1h' ? replayWindow * 2 : replayWindow + 10;
+      const startDt = new Date(entryDt);
+      startDt.setDate(startDt.getDate() - contextDays);
+      const endDt = new Date(entryDt);
+      endDt.setDate(endDt.getDate() + windowDays);
+
+      const startStr = startDt.toISOString().split('T')[0];
+      const endStr = endDt.toISOString().split('T')[0];
+
+      const r = await fetch(`${API}/replay/${replayTicker}?start_date=${startStr}&end_date=${endStr}&interval=${interval}`);
+      if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Failed to fetch data'); }
+      const data = await r.json();
+
+      if (!data.candles || data.candles.length === 0) throw new Error('No candle data returned');
+
+      // Find entry candle index (first candle on or after entry date)
+      let eIdx = 0;
+      const entryDateStr = entryDate;
+      for (let i = 0; i < data.candles.length; i++) {
+        const cDate = data.candles[i].time.split('T')[0];
+        if (cDate >= entryDateStr) { eIdx = i; break; }
+        eIdx = i;
+      }
+
+      // If no explicit entry price, use the open of the entry candle
+      const ep = parseFloat(entryPrice);
+      const actualEntry = (ep && ep > 0) ? ep : data.candles[eIdx].open;
+      setEntryPrice(String(actualEntry));
+
+      setCandles(data.candles);
+      setEntryIdx(eIdx);
+      setCurrentIdx(eIdx); // Start showing context + entry candle
+      setCurrentPrice(data.candles[eIdx].close);
+      setReplayActive(true);
+      setStatus('OPEN');
+
+      // Draw context candles (before entry) all at once
+      if (seriesRef.current) {
+        const contextCandles = data.candles.slice(0, eIdx + 1).map(c => ({
+          time: c.time,
+          open: c.open, high: c.high, low: c.low, close: c.close,
+        }));
+        seriesRef.current.setData(contextCandles);
+
+        // Add entry marker
+        seriesRef.current.setMarkers([{
+          time: data.candles[eIdx].time,
+          position: 'belowBar', color: '#06b6d4', shape: 'arrowUp',
+          text: `ENTRY @ $${actualEntry.toFixed(2)}`,
+        }]);
+
+        // Add stop and target price lines
+        // Remove old lines by re-creating series options
+        if (chartRef.current) {
+          // We'll use createPriceLine on the series
+          seriesRef.current.createPriceLine({
+            price: direction === 'LONG' ? actualEntry * (1 - stopLossPct / 100) : actualEntry * (1 + stopLossPct / 100),
+            color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true, title: 'STOP',
+          });
+          seriesRef.current.createPriceLine({
+            price: direction === 'LONG' ? actualEntry * (1 + takeProfitPct / 100) : actualEntry * (1 - takeProfitPct / 100),
+            color: '#10b981', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true, title: 'TARGET',
+          });
+        }
+
+        chartRef.current.timeScale().fitContent();
+      }
+
+      // Calculate initial P&L
+      const initClose = data.candles[eIdx].close;
+      const initPnl = direction === 'LONG'
+        ? (initClose - actualEntry) * Math.max(1, Math.floor(positionSize / actualEntry))
+        : (actualEntry - initClose) * Math.max(1, Math.floor(positionSize / actualEntry));
+      const initPnlPct = direction === 'LONG'
+        ? ((initClose - actualEntry) / actualEntry) * 100
+        : ((actualEntry - initClose) / actualEntry) * 100;
+      setPnl(initPnl);
+      setPnlPct(initPnlPct);
+
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  // Step forward one candle
+  const stepForward = useCallback(() => {
+    if (!replayActive || status !== 'OPEN') return;
+    setCurrentIdx(prev => {
+      const nextIdx = prev + 1;
+      if (nextIdx >= candles.length) {
+        setStatus('EXPIRED');
+        setExitPrice(candles[candles.length - 1].close);
+        setExitReason('Replay window expired');
+        setExitIdx(candles.length - 1);
+        setPlaying(false);
+        return prev;
+      }
+
+      // Check max candles from entry
+      if (nextIdx - entryIdx > replayWindow) {
+        setStatus('EXPIRED');
+        setExitPrice(candles[nextIdx - 1].close);
+        setExitReason('Replay window expired');
+        setExitIdx(nextIdx - 1);
+        setPlaying(false);
+        return prev;
+      }
+
+      const candle = candles[nextIdx];
+      const ep = parseFloat(entryPrice);
+      const q = Math.max(1, Math.floor(positionSize / ep));
+
+      // Update chart
+      if (seriesRef.current) {
+        seriesRef.current.update({
+          time: candle.time,
+          open: candle.open, high: candle.high, low: candle.low, close: candle.close,
+        });
+      }
+
+      setCurrentPrice(candle.close);
+
+      // Calculate P&L
+      const newPnl = direction === 'LONG'
+        ? (candle.close - ep) * q
+        : (ep - candle.close) * q;
+      const newPnlPct = direction === 'LONG'
+        ? ((candle.close - ep) / ep) * 100
+        : ((ep - candle.close) / ep) * 100;
+
+      setPnl(newPnl);
+      setPnlPct(newPnlPct);
+      setMaxFav(prev => Math.max(prev, newPnl));
+      setMaxAdv(prev => Math.min(prev, newPnl));
+
+      // Check stop loss (at candle close)
+      const stopP = direction === 'LONG' ? ep * (1 - stopLossPct / 100) : ep * (1 + stopLossPct / 100);
+      const targetP = direction === 'LONG' ? ep * (1 + takeProfitPct / 100) : ep * (1 - takeProfitPct / 100);
+
+      if (direction === 'LONG') {
+        if (candle.close <= stopP) {
+          setStatus('STOPPED_OUT');
+          setExitPrice(candle.close);
+          setExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`);
+          setExitIdx(nextIdx);
+          setPlaying(false);
+        } else if (candle.close >= targetP) {
+          setStatus('TARGET_HIT');
+          setExitPrice(candle.close);
+          setExitReason(`Take profit hit at $${candle.close.toFixed(2)}`);
+          setExitIdx(nextIdx);
+          setPlaying(false);
+        }
+      } else {
+        if (candle.close >= stopP) {
+          setStatus('STOPPED_OUT');
+          setExitPrice(candle.close);
+          setExitReason(`Stop loss hit at $${candle.close.toFixed(2)}`);
+          setExitIdx(nextIdx);
+          setPlaying(false);
+        } else if (candle.close <= targetP) {
+          setStatus('TARGET_HIT');
+          setExitPrice(candle.close);
+          setExitReason(`Take profit hit at $${candle.close.toFixed(2)}`);
+          setExitIdx(nextIdx);
+          setPlaying(false);
+        }
+      }
+
+      return nextIdx;
+    });
+  }, [replayActive, status, candles, entryIdx, entryPrice, direction, positionSize, stopLossPct, takeProfitPct, replayWindow]);
+
+  // Play/pause timer
+  useEffect(() => {
+    if (playing && status === 'OPEN') {
+      const ms = Math.max(100, 1000 / speed);
+      timerRef.current = window.setInterval(stepForward, ms);
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [playing, speed, stepForward, status]);
+
+  // Page Visibility API — pause when tab hidden
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden && playing) setPlaying(false);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [playing]);
+
+  // Reset replay
+  const resetReplay = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setPlaying(false);
+    setStatus('OPEN');
+    setExitPrice(null);
+    setExitReason('');
+    setExitIdx(null);
+    setMaxFav(0);
+    setMaxAdv(0);
+    setCurrentIdx(entryIdx);
+
+    if (seriesRef.current && candles.length > 0) {
+      const ep = parseFloat(entryPrice);
+      const contextCandles = candles.slice(0, entryIdx + 1).map(c => ({
+        time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+      }));
+      seriesRef.current.setData(contextCandles);
+      setCurrentPrice(candles[entryIdx].close);
+      const initPnl = direction === 'LONG'
+        ? (candles[entryIdx].close - ep) * qty
+        : (ep - candles[entryIdx].close) * qty;
+      setPnl(initPnl);
+      setPnlPct(direction === 'LONG'
+        ? ((candles[entryIdx].close - ep) / ep) * 100
+        : ((ep - candles[entryIdx].close) / ep) * 100);
+      if (chartRef.current) chartRef.current.timeScale().fitContent();
+    }
+  };
+
+  const candlesElapsed = currentIdx - entryIdx;
+  const isFinished = status === 'STOPPED_OUT' || status === 'TARGET_HIT' || status === 'EXPIRED';
+  const finalPnl = exitPrice ? (direction === 'LONG' ? (exitPrice - parseFloat(entryPrice)) * qty : (parseFloat(entryPrice) - exitPrice) * qty) : 0;
+  const finalPnlPct = exitPrice ? (direction === 'LONG' ? ((exitPrice - parseFloat(entryPrice)) / parseFloat(entryPrice)) * 100 : ((parseFloat(entryPrice) - exitPrice) / parseFloat(entryPrice)) * 100) : 0;
+
+  const statusColors = {
+    IDLE: 'text-slate-400 bg-slate-800', OPEN: 'text-cyan-400 bg-cyan-900/30 border-cyan-700',
+    STOPPED_OUT: 'text-red-400 bg-red-900/30 border-red-700',
+    TARGET_HIT: 'text-green-400 bg-green-900/30 border-green-700',
+    EXPIRED: 'text-yellow-400 bg-yellow-900/30 border-yellow-700',
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-y-auto">
+      {/* Signal banner — only shows when signal data exists but not auto-starting */}
+      {signalState && signalState.ticker && !replayActive && !loading && status === 'IDLE' && (
+        <div className="mx-4 mt-3 p-3 bg-cyan-900/20 border border-cyan-800 rounded-lg flex items-center justify-between">
+          <div className="text-xs text-cyan-300">
+            Signal from <span className="font-bold">{signalState.ticker} {signalState.quarter}</span> —
+            <span className={`font-bold ml-1 ${signalState.signal_label === 'LONG' ? 'text-green-400' : signalState.signal_label === 'SHORT' ? 'text-red-400' : 'text-yellow-400'}`}>{signalState.signal_label} {signalState.composite_signal?.toFixed(2)}</span>
+            {signalState.entry_price && <> @ ${signalState.entry_price}</>}
+          </div>
+          <button onClick={loadFromSignal} className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 rounded text-xs font-bold text-white">Load Signal Data</button>
+        </div>
+      )}
+
+      {/* TOP SECTION — Trade Setup */}
+      <div className="p-4">
+        <div className="bg-white/[0.03] rounded-2xl p-6 ring-1 ring-white/[0.05] premium-shadow-lg">
+          <h2 className="text-[13px] font-medium text-slate-400 uppercase tracking-[0.14em] mb-5">Trade Setup</h2>
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left inputs */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Ticker</label>
+                  <input type="text" value={replayTicker} onChange={e => setReplayTicker(e.target.value.toUpperCase())}
+                    placeholder="NVDA" className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Entry Date</label>
+                  <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Direction</label>
+                  <div className="flex rounded-xl overflow-hidden ring-1 ring-white/[0.06]">
+                    <button onClick={() => setDirection('LONG')}
+                      className={`flex-1 py-2 text-sm font-semibold transition-all ${direction === 'LONG' ? 'bg-emerald-500/80 text-white' : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06]'}`}>LONG</button>
+                    <button onClick={() => setDirection('SHORT')}
+                      className={`flex-1 py-2 text-sm font-semibold transition-all ${direction === 'SHORT' ? 'bg-rose-500/80 text-white' : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06]'}`}>SHORT</button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Entry Price (auto if blank)</label>
+                  <input type="number" step="0.01" value={entryPrice} onChange={e => setEntryPrice(e.target.value)}
+                    placeholder="Auto-fill from data" className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Position ($)</label>
+                  <input type="number" value={positionSize} onChange={e => setPositionSize(Number(e.target.value))}
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Stop Loss %</label>
+                  <input type="number" step="0.5" value={stopLossPct} onChange={e => setStopLossPct(Number(e.target.value))}
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Take Profit %</label>
+                  <input type="number" step="0.5" value={takeProfitPct} onChange={e => setTakeProfitPct(Number(e.target.value))}
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm mono focus:border-sky-400/40 focus:outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Interval</label>
+                  <select value={interval} onChange={e => setInterval_(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none">
+                    <option value="1d">Daily Candles</option>
+                    <option value="1h">Hourly Candles</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Replay Window</label>
+                  <select value={replayWindow} onChange={e => setReplayWindow(Number(e.target.value))}
+                    className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-sm focus:border-sky-400/40 focus:outline-none">
+                    <option value={5}>5 candles</option>
+                    <option value={10}>10 candles</option>
+                    <option value={20}>20 candles</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            {/* Right — signal info + start button */}
+            <div className="flex flex-col justify-between">
+              {signalState && signalState.ticker && (
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                      signalState.signal_label === 'LONG' ? 'bg-green-900/50 text-green-400 border border-green-600'
+                      : signalState.signal_label === 'SHORT' ? 'bg-red-900/50 text-red-400 border border-red-600'
+                      : 'bg-yellow-900/50 text-yellow-400 border border-yellow-600'
+                    }`}>{signalState.signal_label} {signalState.composite_signal?.toFixed(2)}</span>
+                    <span className="text-xs text-slate-400">Confidence: {((signalState.confidence || 0) * 100).toFixed(0)}%</span>
+                  </div>
+                  {signalState.one_line_summary && <p className="text-xs text-slate-400 italic">{signalState.one_line_summary}</p>}
+                </div>
+              )}
+              {!signalState?.ticker && (
+                <div className="text-xs text-slate-500 mb-4 p-3 bg-slate-800 rounded border border-slate-700">
+                  No signal data loaded. Run an analysis on the Signal Analysis page first, or manually enter trade parameters.
+                </div>
+              )}
+              <div className="space-y-3">
+                {qty > 0 && parseFloat(entryPrice) > 0 && (
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-slate-700/50 rounded p-2 text-center">
+                      <div className="text-slate-500">Shares</div>
+                      <div className="mono font-bold text-slate-200">{qty}</div>
+                    </div>
+                    <div className="bg-slate-700/50 rounded p-2 text-center">
+                      <div className="text-slate-500">Stop</div>
+                      <div className="mono font-bold text-red-400">${stopPrice.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-slate-700/50 rounded p-2 text-center">
+                      <div className="text-slate-500">Target</div>
+                      <div className="mono font-bold text-green-400">${targetPrice.toFixed(2)}</div>
+                    </div>
+                  </div>
+                )}
+                <button onClick={startReplay} disabled={loading || !replayTicker || !entryDate}
+                  className="w-full px-4 py-3 bg-gradient-to-b from-sky-400 to-sky-500 hover:from-sky-300 hover:to-sky-400 disabled:bg-white/[0.04] disabled:text-slate-600 disabled:from-transparent disabled:to-transparent rounded-2xl font-semibold text-sm text-white transition-all glow-pulse shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2">
+                  {loading ? <><Spinner /> Loading Data...</> : 'Start Replay'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM SECTION — Replay Canvas */}
+      <div className="flex-1 px-4 pb-4 flex gap-4">
+        {/* Chart + Controls */}
+        <div className="flex-1 flex flex-col">
+          <div className="bg-white/[0.02] rounded-2xl ring-1 ring-white/[0.05] premium-shadow-lg flex-1 flex flex-col overflow-hidden">
+            <div ref={chartContainerRef} className="flex-1 min-h-[420px]" />
+            {/* Replay controls */}
+            <div className="flex items-center gap-3 px-5 py-3.5 border-t border-white/[0.04] glass-panel">
+              <button onClick={() => setPlaying(!playing)} disabled={!replayActive || isFinished}
+                className={`px-5 py-1.5 rounded-xl font-semibold text-sm ${playing ? 'bg-amber-500/80 hover:bg-amber-400/80 text-white' : 'bg-sky-500/80 hover:bg-sky-400/80 text-white'} disabled:bg-white/[0.04] disabled:text-slate-600`}>
+                {playing ? 'Pause' : 'Play'}
+              </button>
+              <button onClick={stepForward} disabled={!replayActive || isFinished || playing}
+                className="px-4 py-1.5 rounded-xl text-sm bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 disabled:bg-white/[0.02] disabled:text-slate-600 font-medium">
+                Step
+              </button>
+              <button onClick={resetReplay} disabled={!replayActive}
+                className="px-4 py-1.5 rounded-xl text-sm bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 disabled:bg-white/[0.02] disabled:text-slate-600 font-medium">
+                Reset
+              </button>
+              <div className="flex items-center gap-2 ml-4">
+                <span className="text-xs text-slate-400">Speed:</span>
+                {[1, 2, 5, 10].map(s => (
+                  <button key={s} onClick={() => setSpeed(s)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${speed === s ? 'bg-sky-500/80 text-white' : 'bg-white/[0.05] text-slate-400 hover:bg-white/[0.1]'}`}>
+                    {s}x
+                  </button>
+                ))}
+              </div>
+              <div className="ml-auto text-xs text-slate-500 mono">
+                Candle {candlesElapsed} / {replayWindow}
+              </div>
+            </div>
+          </div>
+          {error && <div className="mt-2 text-xs text-red-400 bg-red-900/20 rounded p-2 border border-red-800">{error}</div>}
+        </div>
+
+        {/* Live P&L Sidebar */}
+        <div className="w-60 flex flex-col gap-3">
+          {/* Signal Context — sub-scores from analysis */}
+          {signalState && signalState.sub_scores && (
+            <div className="bg-white/[0.03] rounded-2xl p-4 ring-1 ring-white/[0.05] premium-shadow space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-3 bg-cyan-500 rounded-full"></div>
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Signal Breakdown</span>
+              </div>
+              {[
+                { key: 'guidance_hedge', label: 'Guidance', weight: '35%' },
+                { key: 'analyst_pressure', label: 'Analyst Pressure', weight: '15%' },
+                { key: 'language_momentum', label: 'Language', weight: '50%' },
+              ].map(({ key, label, weight }) => {
+                const d = signalState.sub_scores[key];
+                if (!d) return null;
+                const s = d.score || 0;
+                const pct = ((s + 1) / 2) * 100;
+                const color = s > 0.15 ? '#10b981' : s < -0.15 ? '#ef4444' : '#f59e0b';
+                return (
+                  <div key={key}>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">{label} <span className="text-slate-600">({weight})</span></span>
+                      <span className="mono font-bold" style={{ color }}>{s > 0 ? '+' : ''}{s.toFixed(2)}</span>
+                    </div>
+                    <div className="h-1 bg-slate-700 rounded mt-0.5">
+                      <div className="h-full rounded" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+              {signalState.sub_scores.earnings_surprise && (
+                <div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">EPS Surprise <span className="text-slate-600">(conf.)</span></span>
+                    <span className="mono font-bold" style={{ color: (signalState.sub_scores.earnings_surprise.score || 0) > 0 ? '#10b981' : '#ef4444' }}>
+                      {(signalState.sub_scores.earnings_surprise.score || 0) > 0 ? '+' : ''}{(signalState.sub_scores.earnings_surprise.score || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  {signalState.sub_scores.earnings_surprise.surprise_pct != null && (
+                    <div className="text-xs text-slate-600 mono mt-0.5">
+                      {signalState.sub_scores.earnings_surprise.beat ? 'Beat' : 'Missed'} by {Math.abs(signalState.sub_scores.earnings_surprise.surprise_pct).toFixed(1)}%
+                    </div>
+                  )}
+                </div>
+              )}
+              {signalState.calibration && (
+                <div className="pt-1 border-t border-slate-700 mt-1">
+                  <div className="text-xs text-slate-500">Expected Move</div>
+                  <div className="text-xs mono text-cyan-400 font-bold">{signalState.calibration.expected_move || 'N/A'}</div>
+                  <div className="text-xs text-slate-600 mt-0.5">Accuracy: {signalState.calibration.historical_accuracy || 'N/A'}</div>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow space-y-4">
+            <div className={`text-center px-3 py-2 rounded-full text-xs font-bold uppercase tracking-[0.1em] ring-1 ring-white/[0.06] ${statusColors[status] || statusColors.IDLE}`}>
+              {status.replace('_', ' ')}
+            </div>
+            <div className="text-center py-1">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Current Price</div>
+              <div className="text-2xl font-black mono text-slate-100">${currentPrice.toFixed(2)}</div>
+            </div>
+            <div className={`rounded-lg p-2.5 text-center ${pnl >= 0 ? 'bg-green-500/5 border border-green-500/15' : 'bg-red-500/5 border border-red-500/15'}`}>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Unrealized P&L</div>
+              <div className={`text-xl font-black mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
+              </div>
+              <div className={`text-sm mono font-bold ${pnlPct >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-slate-900/40 rounded-lg p-1.5 text-center">
+                <div className="text-[10px] text-slate-500">Best</div>
+                <div className="text-xs font-bold mono text-green-400">{maxFav >= 0 ? '+' : ''}${maxFav.toFixed(2)}</div>
+              </div>
+              <div className="bg-slate-900/40 rounded-lg p-1.5 text-center">
+                <div className="text-[10px] text-slate-500">Worst</div>
+                <div className="text-xs font-bold mono text-red-400">{maxAdv <= 0 ? '' : '+'}${maxAdv.toFixed(2)}</div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] text-slate-500 uppercase">Candles</span>
+              <span className="text-sm font-bold mono text-slate-200">{candlesElapsed} / {replayWindow}</span>
+            </div>
+          </div>
+
+          {/* Trade result card */}
+          {isFinished && (
+            <div className={`fade-in rounded-xl p-4 border space-y-2 ${finalPnl >= 0 ? 'bg-green-900/20 border-green-700' : 'bg-red-900/20 border-red-700'}`}>
+              <div className={`text-center text-lg font-black ${finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {status === 'TARGET_HIT' ? 'TARGET HIT' : status === 'STOPPED_OUT' ? 'STOPPED OUT' : 'EXPIRED'}
+              </div>
+              <div className="text-xs space-y-1 text-slate-300">
+                <div className="flex justify-between"><span className="text-slate-500">Entry:</span><span className="mono">${parseFloat(entryPrice).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Exit:</span><span className="mono">${exitPrice?.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">P&L:</span>
+                  <span className={`mono font-bold ${finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {finalPnl >= 0 ? '+' : ''}${finalPnl.toFixed(2)} ({finalPnlPct >= 0 ? '+' : ''}{finalPnlPct.toFixed(2)}%)
+                  </span>
+                </div>
+                <div className="flex justify-between"><span className="text-slate-500">Duration:</span><span className="mono">{exitIdx - entryIdx} candles</span></div>
+              </div>
+              <div className="space-y-1.5 pt-1">
+                <button onClick={resetReplay} className="w-full py-1.5 bg-cyan-700 hover:bg-cyan-600 rounded text-xs font-bold text-white">Replay Again</button>
+                <button onClick={() => { setReplayActive(false); setCandles([]); setStatus('IDLE'); setEntryPrice(''); }}
+                  className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-300">Try Different Params</button>
+              </div>
+            </div>
+          )}
+
+          <div className="text-xs text-slate-600 text-center mt-auto pt-2">
+            Simulated results using historical data. Not financial advice.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== MAIN APP WITH NAVIGATION =====================
+
+function App() {
+  const [activePage, setActivePage] = useState(window.location.pathname === '/simulator' ? 'replay' : 'analysis');
+  const [signalState, setSignalState] = useState(null);
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const handlePop = () => {
+      setActivePage(window.location.pathname === '/simulator' ? 'replay' : 'analysis');
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
+  const navigateTo = (page) => {
+    setActivePage(page);
+    const path = page === 'replay' ? '/simulator' : '/';
+    window.history.pushState({}, '', path);
+  };
+
+  return (
+    <div className="h-screen flex flex-col">
+      {/* Navigation Header */}
+      <header className="flex-shrink-0">
+        <div className="h-[1px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent"></div>
+        <div className="glass-panel border-b border-white/[0.04] px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-sky-300 to-blue-500 rounded-xl flex items-center justify-center font-black text-white text-[10px] tracking-tight shadow-lg shadow-sky-500/25">EA</div>
+              <div>
+                <h1 className="text-[15px] font-semibold text-white/90 tracking-tight leading-tight">Earnings Alpha Scanner</h1>
+              </div>
+            </div>
+            <nav className="flex items-center gap-1">
+              <button onClick={() => navigateTo('analysis')}
+                className={`px-5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-300 ${
+                  activePage === 'analysis' ? 'bg-white/[0.08] text-white ring-1 ring-white/[0.08]' : 'text-slate-400 hover:text-white/80 hover:bg-white/[0.04]'
+                }`}>Signal Analysis</button>
+              <button onClick={() => navigateTo('replay')}
+                className={`px-5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-300 ${
+                  activePage === 'replay' ? 'bg-white/[0.08] text-white ring-1 ring-white/[0.08]' : 'text-slate-400 hover:text-white/80 hover:bg-white/[0.04]'
+                }`}>Replay Simulator</button>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* Page Content */}
+      {/* Analysis page stays mounted (hidden via CSS) to preserve state */}
+      <div style={{ display: activePage === 'analysis' ? 'contents' : 'none' }}>
+        <SignalAnalysisPage signalState={signalState} setSignalState={setSignalState} navigateTo={navigateTo} />
+      </div>
+      {/* Replay page mounts fresh each time (chart needs visible container) */}
+      {activePage === 'replay' && <ReplaySimulatorPage signalState={signalState} setSignalState={setSignalState} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
