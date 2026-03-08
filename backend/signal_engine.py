@@ -155,20 +155,31 @@ def _is_substantive_answer(text: str) -> bool:
 # --- Sub-score 1: Guidance Hedge Score ---
 
 NEGATIVE_CONTENT_KEYWORDS = [
-    "decline", "declined", "decrease", "decreased", "lower", "reduce",
-    "cut", "cuts", "loss", "losses", "pressure", "compression",
+    "decline", "declined", "decrease", "decreased", "reduce", "reduced",
+    "losses", "pressure", "compression",
     "headwind", "challenging", "difficult", "slowdown", "slowing",
-    "uncertainty", "cautious", "concern", "risk", "weaker", "weakness",
-    "miss", "missed", "below", "shortfall", "down sequentially",
+    "uncertainty", "cautious", "weaker", "weakness",
+    "missed", "shortfall", "down sequentially",
     "unfavorable", "deteriorat", "soften", "softness",
-    "contraction", "downturn", "restructur", "impair",
+    "contraction", "downturn", "restructur",
     "disappoint", "underperform", "erosion", "margin pressure",
+    "decelerat", "churn", "attrition",
+    "subscriber loss", "write-down", "write-off", "impairment",
+    "pricing pressure", "competitive pressure", "market share loss",
+    "worse", "worsening", "drag",
+    "not yet seeing", "not where we want", "still early",
+    "longer than expected", "pushed out", "delayed",
 ]
 
 POSITIVE_CONTENT_KEYWORDS = [
-    "growth", "grew", "increase", "increased", "demand", "opportunity",
-    "expansion", "outperform", "beat", "upside", "robust", "strength",
-    "favorable", "tailwind", "improving",
+    "record revenue", "record quarter", "all-time high", "record earnings",
+    "outperform", "beat", "upside", "robust", "strength",
+    "favorable", "tailwind", "improving", "accelerat",
+    "exceeded", "surpassed", "ahead of", "better than expected",
+    "strong demand", "strong growth", "strong results", "strong performance",
+    "margin expansion", "margin improvement", "operating leverage",
+    "raised guidance", "raise our outlook", "increased our forecast",
+    "new highs", "inflection", "breakthrough", "transformative",
 ]
 
 
@@ -306,8 +317,9 @@ def compute_analyst_pressure(parsed: dict) -> dict:
                 deflection_sentences.append(a)
                 break
 
-    # Specificity ratio: what fraction of management answers contain hard numbers
-    specificity_ratio = specific_count / max(len(mgmt_answers), 1)
+    # Specificity: only count answers with actual numbers, not just long answers
+    number_count = sum(1 for a in mgmt_answers if _has_specific_numbers(a["text"]))
+    specificity_ratio = number_count / max(len(mgmt_answers), 1)
     # Deflection ratio: what fraction of management answers are deflections
     deflection_ratio = deflection_count / max(len(mgmt_answers), 1)
     # Repeat pressure: penalize when analysts press on same topic
@@ -315,7 +327,8 @@ def compute_analyst_pressure(parsed: dict) -> dict:
 
     # Positive: high specificity = management is being transparent and data-driven
     # Negative: deflections and repeat questioning = management being evasive
-    raw_score = (specificity_ratio * 1.5) - (deflection_ratio * 2.0) - (repeat_ratio * 0.5)
+    # Center at ~20% (typical % of answers with hard numbers), so normal = ~0
+    raw_score = ((specificity_ratio - 0.20) * 1.8) - (deflection_ratio * 2.0) - (repeat_ratio * 0.6)
     score = max(-1.0, min(1.0, raw_score))
 
     # Build top sentences
@@ -494,7 +507,6 @@ def compute_language_momentum(parsed: dict, all_cached_texts: list[str] = None) 
 
     texts = [s["text"] for s in all_sentences]
     embeddings = model.encode(texts, show_progress_bar=False)
-    current_centroid = np.mean(embeddings, axis=0)
 
     # Compute anchor embeddings
     pos_emb = model.encode(POSITIVE_ANCHORS, show_progress_bar=False)
@@ -502,75 +514,73 @@ def compute_language_momentum(parsed: dict, all_cached_texts: list[str] = None) 
     pos_centroid = np.mean(pos_emb, axis=0)
     neg_centroid = np.mean(neg_emb, axis=0)
 
-    # Per-sentence scoring: compute how strongly each sentence leans pos vs neg
+    # --- LAYER 1: Keyword content analysis (more reliable for direction) ---
+    # Weight Q&A section 2x because analyst questions expose real issues
+    pos_hits = 0
+    neg_hits = 0
+    for s in all_sentences:
+        text_lower = s["text"].lower()
+        weight = 2.0 if s.get("section") == "qa" else 1.0
+        pos_hits += sum(weight for kw in POSITIVE_CONTENT_KEYWORDS if kw in text_lower)
+        neg_hits += sum(weight for kw in NEGATIVE_CONTENT_KEYWORDS if kw in text_lower)
+
+    total_hits = pos_hits + neg_hits
+    if total_hits > 0:
+        keyword_ratio = (pos_hits - neg_hits) / total_hits  # -1 to +1
+    else:
+        keyword_ratio = 0.0
+
+    # --- LAYER 2: Embedding similarity (semantic nuance) ---
     sentence_scores = []
     for i, emb in enumerate(embeddings):
         ps = float(1 - cosine(emb, pos_centroid))
         ns = float(1 - cosine(emb, neg_centroid))
         sentence_scores.append(ps - ns)
 
-    # Key insight: ALL earnings calls lean positive in aggregate.
-    # What differentiates bullish from bearish is:
-    # 1. The DENSITY of strongly positive sentences (top percentile)
-    # 2. The PRESENCE of negative-leaning sentences
-    # 3. The SPREAD of the distribution
+    n = len(sentence_scores)
+    mean_score = float(np.mean(sentence_scores)) if n > 0 else 0.0
+    neg_leaning = sum(1 for s in sentence_scores if s < 0)
+    neg_fraction = neg_leaning / n if n > 0 else 0.0
 
-    sorted_scores = sorted(sentence_scores)
-    n = len(sorted_scores)
+    # --- LAYER 3: Relative comparison if reference transcripts available ---
+    relative_score = 0.0
+    has_relative = False
+    if all_cached_texts and len(all_cached_texts) > 0:
+        ref_keyword_ratios = []
+        ref_neg_fractions = []
+        for t in all_cached_texts:
+            ref_sents = [s.strip() for s in t.split(". ") if len(s.strip()) > 10][:200]
+            if len(ref_sents) < 10:
+                continue
+            rp = sum(1 for s in ref_sents for kw in POSITIVE_CONTENT_KEYWORDS if kw in s.lower())
+            rn = sum(1 for s in ref_sents for kw in NEGATIVE_CONTENT_KEYWORDS if kw in s.lower())
+            rt = rp + rn
+            ref_keyword_ratios.append((rp - rn) / rt if rt > 0 else 0.0)
+            ref_embs = model.encode(ref_sents, show_progress_bar=False)
+            ref_ss = [float(1 - cosine(e, pos_centroid)) - float(1 - cosine(e, neg_centroid)) for e in ref_embs]
+            ref_neg_fractions.append(sum(1 for s in ref_ss if s < 0) / len(ref_ss))
 
-    # Count strongly positive sentences (top quartile threshold)
-    if n > 0:
-        threshold_pos = sorted_scores[int(n * 0.75)]  # 75th percentile
-        threshold_neg = sorted_scores[int(n * 0.25)]  # 25th percentile
+        if ref_keyword_ratios:
+            has_relative = True
+            avg_ref_kw = float(np.mean(ref_keyword_ratios))
+            avg_ref_neg = float(np.mean(ref_neg_fractions))
+            kw_delta = keyword_ratio - avg_ref_kw
+            neg_delta = avg_ref_neg - neg_fraction
+            relative_score = kw_delta * 2.0 + neg_delta * 1.5
 
-        # Strong positive = sentences where pos-neg diff is in top 10%
-        strong_pos = sum(1 for s in sentence_scores if s > sorted_scores[int(n * 0.90)])
-        # Negative-leaning sentences (closer to negative anchors than positive)
-        neg_leaning = sum(1 for s in sentence_scores if s < 0)
-        neg_fraction = neg_leaning / n
+    # --- Combine layers ---
+    # Keyword ratio is the strongest directional signal
+    # Embedding neg_fraction adds nuance (more negative sentences = bearish)
+    # Relative comparison adjusts if reference data available
+    embedding_signal = -neg_fraction * 3.0 + 0.3  # baseline: 10% neg → ~0, 20% neg → -0.3
 
-        # Score combines:
-        # - Mean sentence score (baseline)
-        # - Negative sentence fraction (penalizes bearish language)
-        # - Standard deviation (high variance = mixed signals = bearish)
-        mean_score = float(np.mean(sentence_scores))
-        std_score = float(np.std(sentence_scores))
-
-        # Relative scoring: compare this transcript's metrics against
-        # reference transcripts if available
-        if all_cached_texts and len(all_cached_texts) > 0:
-            ref_neg_fractions = []
-            ref_means = []
-            for t in all_cached_texts:
-                ref_sents = [s.strip() for s in t.split(". ") if len(s.strip()) > 10][:200]
-                if len(ref_sents) < 10:
-                    continue
-                ref_embs = model.encode(ref_sents, show_progress_bar=False)
-                ref_ss = []
-                for e in ref_embs:
-                    rps = float(1 - cosine(e, pos_centroid))
-                    rns = float(1 - cosine(e, neg_centroid))
-                    ref_ss.append(rps - rns)
-                ref_neg_fractions.append(sum(1 for s in ref_ss if s < 0) / len(ref_ss))
-                ref_means.append(float(np.mean(ref_ss)))
-
-            if ref_means:
-                avg_ref_mean = float(np.mean(ref_means))
-                avg_ref_neg = float(np.mean(ref_neg_fractions))
-                # Score relative to the average across cached transcripts
-                # Use moderate multipliers — embedding diffs are small (~0.01-0.04)
-                mean_delta = mean_score - avg_ref_mean
-                neg_delta = avg_ref_neg - neg_fraction  # less neg = better
-                raw_score = mean_delta * 6 + neg_delta * 2
-            else:
-                raw_score = (mean_score - 0.10) * 3 - max(0, neg_fraction - 0.10) * 2
-        else:
-            # No reference transcripts — use conservative absolute scoring
-            # Actual earnings call mean pos-neg similarity diff is ~0.07-0.14
-            # Only flag clear extremes (e.g. TSLA's 0.07 mean + 19% neg fraction)
-            raw_score = (mean_score - 0.10) * 3 - max(0, neg_fraction - 0.10) * 2
+    if has_relative:
+        raw_score = 0.50 * keyword_ratio + 0.25 * embedding_signal + 0.25 * relative_score
     else:
-        raw_score = 0.0
+        raw_score = 0.60 * keyword_ratio + 0.40 * embedding_signal
+
+    # Scale up — raw values tend to be small
+    raw_score = raw_score * 2.5
 
     score = max(-1.0, min(1.0, raw_score))
 
