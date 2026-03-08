@@ -231,7 +231,7 @@ function Spinner({ size = 'w-5 h-5' }) {
 
 // ===================== PAGE 1: SIGNAL ANALYSIS =====================
 
-function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
+function SignalAnalysisPage({ signalState, setSignalState, navigateTo, simAccount, setSimAccount }) {
   const [samples, setSamples] = useState([]);
   const [selectedSample, setSelectedSample] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -251,8 +251,6 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
   const [backtestResult, setBacktestResult] = useState(null);
   const [fetchLoading, setFetchLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
-  const [alpacaConnected, setAlpacaConnected] = useState(false);
-  const [alpacaAccount, setAlpacaAccount] = useState(null);
   const [positions, setPositions] = useState([]);
   const [orders, setOrders] = useState([]);
   const [tradeExecuting, setTradeExecuting] = useState(false);
@@ -273,26 +271,10 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
   const logRef = useRef(null);
   const subScoresRef = useRef({});
 
-  const refreshTrading = useCallback(async () => {
-    try {
-      const r = await fetch(`${API}/trading/status`);
-      const d = await r.json();
-      setAlpacaConnected(d.connected);
-      if (d.connected) {
-        setAlpacaAccount(d.account);
-        const [posR, ordR] = await Promise.all([
-          fetch(`${API}/trading/positions`).then(x => x.json()),
-          fetch(`${API}/trading/orders`).then(x => x.json()),
-        ]);
-        setPositions(Array.isArray(posR) ? posR : []);
-        setOrders(Array.isArray(ordR) ? ordR : []);
-      }
-    } catch (e) { setAlpacaConnected(false); }
-  }, []);
+  const refreshTrading = useCallback(() => {}, []);
 
   useEffect(() => {
     fetch(`${API}/samples`).then(r => r.json()).then(d => setSamples(d.samples || [])).catch(() => {});
-    refreshTrading();
   }, []);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [eventLog]);
@@ -566,50 +548,61 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
     ttsMutedRef.current = newVal;
   };
 
-  const prepareTradePreview = async () => {
+  const prepareTradePreview = () => {
     if (!composite || !ticker) return;
     if (composite.signal_label === 'NEUTRAL') { addLog('Signal is NEUTRAL -- no trade to execute.'); return; }
-    try {
-      const r = await fetch(`${API}/trading/quote/${ticker}`);
-      const q = await r.json();
-      const confidence = composite.confidence || 0.5;
-      const notional = 2000 * confidence;
-      const qty = Math.max(1, Math.floor(notional / q.mid));
-      setTradePreview({
-        ticker, side: composite.signal_label === 'LONG' ? 'BUY' : 'SELL SHORT',
-        qty, price: q.mid, notional: (qty * q.mid).toFixed(2),
-        signal_label: composite.signal_label, composite_signal: composite.composite_signal, confidence,
-      });
-      setShowConfirm(true);
-    } catch (e) { addLog(`Quote error: ${e.message}`); }
+    const confidence = composite.confidence || 0.5;
+    const notional = 2000 * confidence;
+    const price = priceData && priceData.series && priceData.series.length > 0
+      ? priceData.series[priceData.series.length - 1].close
+      : 100;
+    const qty = Math.max(1, Math.floor(notional / price));
+    setTradePreview({
+      ticker, side: composite.signal_label === 'LONG' ? 'BUY' : 'SELL SHORT',
+      qty, price, notional: (qty * price).toFixed(2),
+      signal_label: composite.signal_label, composite_signal: composite.composite_signal, confidence,
+    });
+    setShowConfirm(true);
   };
 
-  const executeTrade = async () => {
+  const executeTrade = () => {
     if (!tradePreview) return;
     setTradeExecuting(true); setShowConfirm(false); setTradeResult(null);
+    const cost = tradePreview.qty * tradePreview.price;
+    const side = tradePreview.side === 'BUY' ? 'buy' : 'sell';
     addLog(`Executing ${tradePreview.side} ${tradePreview.qty} ${tradePreview.ticker}...`);
-    try {
-      const r = await fetch(`${API}/trading/execute`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticker: tradePreview.ticker, signal_label: tradePreview.signal_label, composite_signal: tradePreview.composite_signal, confidence: tradePreview.confidence }),
-      });
-      const d = await r.json();
-      setTradeResult(d);
-      if (d.executed) addLog(`Order filled: ${d.side} ${d.qty} ${d.symbol} @ ~$${d.estimated_price}`);
-      else addLog(`Trade not executed: ${d.reason}`);
-      refreshTrading();
-    } catch (e) { addLog(`Trade error: ${e.message}`); setTradeResult({ executed: false, reason: e.message }); }
-    finally { setTradeExecuting(false); }
+    setSimAccount(prev => ({
+      equity: +(prev.equity - cost).toFixed(2),
+      cash: +(prev.cash - cost).toFixed(2),
+      buying_power: +(prev.buying_power - cost * 2).toFixed(2),
+      day_pnl: +(prev.day_pnl - cost + prev.equity - 100000).toFixed(2),
+    }));
+    const newOrder = { side, qty: String(tradePreview.qty), symbol: tradePreview.ticker, status: 'filled', filled_avg_price: String(tradePreview.price) };
+    setOrders(prev => [newOrder, ...prev].slice(0, 10));
+    const existingIdx = positions.findIndex(p => p.symbol === tradePreview.ticker);
+    if (existingIdx >= 0) {
+      setPositions(prev => prev.map((p, i) => i === existingIdx ? { ...p, qty: p.qty + tradePreview.qty, market_value: +(p.market_value + cost).toFixed(2) } : p));
+    } else {
+      setPositions(prev => [...prev, { symbol: tradePreview.ticker, qty: tradePreview.qty, side: side === 'buy' ? 'long' : 'short', avg_entry: tradePreview.price, current_price: tradePreview.price, market_value: +cost.toFixed(2), unrealized_pl: 0, unrealized_plpc: 0 }]);
+    }
+    setTradeResult({ executed: true, side, qty: tradePreview.qty, symbol: tradePreview.ticker, estimated_price: tradePreview.price, estimated_notional: +cost.toFixed(2), status: 'filled' });
+    addLog(`Order filled: ${side.toUpperCase()} ${tradePreview.qty} ${tradePreview.ticker} @ ~$${tradePreview.price.toFixed(2)}`);
+    setTradeExecuting(false);
   };
 
-  const closePosition = async (symbol) => {
-    addLog(`Closing position in ${symbol}...`);
-    try {
-      const r = await fetch(`${API}/trading/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol }) });
-      const d = await r.json();
-      addLog(d.message || `Closed ${symbol}`);
-      refreshTrading();
-    } catch (e) { addLog(`Close error: ${e.message}`); }
+  const closePosition = (symbol) => {
+    const pos = positions.find(p => p.symbol === symbol);
+    if (pos) {
+      setSimAccount(prev => ({
+        equity: +(prev.equity + pos.market_value).toFixed(2),
+        cash: +(prev.cash + pos.market_value).toFixed(2),
+        buying_power: +(prev.buying_power + pos.market_value * 2).toFixed(2),
+        day_pnl: prev.day_pnl,
+      }));
+      setPositions(prev => prev.filter(p => p.symbol !== symbol));
+      setOrders(prev => [{ side: 'sell', qty: String(pos.qty), symbol, status: 'filled', filled_avg_price: String(pos.current_price) }, ...prev].slice(0, 10));
+      addLog(`Closed position in ${symbol}: ${pos.qty} shares @ $${pos.current_price.toFixed(2)}`);
+    }
   };
 
   return (
@@ -906,26 +899,15 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
         <div className="bg-white/[0.03] rounded-2xl p-5 ring-1 ring-white/[0.05] premium-shadow">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.12em]">Paper Trading</h3>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${alpacaConnected ? 'bg-green-900/50 text-green-400 border border-green-700' : 'bg-red-900/50 text-red-400 border border-red-700'}`}>
-              {alpacaConnected ? 'Connected' : 'Disconnected'}
-            </span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-400 border border-green-700">Simulated</span>
           </div>
-          {!alpacaConnected ? (
-            <div className="text-xs text-slate-500 space-y-2">
-              <p>Add Alpaca paper trading keys to <span className="mono text-slate-400">.env</span>:</p>
-              <pre className="bg-slate-900 rounded p-2 mono text-slate-400 text-xs">ALPACA_API_KEY=PKxxx{'\n'}ALPACA_SECRET_KEY=xxx</pre>
-              <button onClick={refreshTrading} className="text-cyan-400 hover:text-cyan-300 text-xs underline">Retry connection</button>
-            </div>
-          ) : (
             <div className="space-y-3">
-              {alpacaAccount && (
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Equity</div><div className="text-sm font-bold mono text-slate-200">${alpacaAccount.equity.toLocaleString()}</div></div>
-                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Buying Power</div><div className="text-sm font-bold mono text-slate-200">${alpacaAccount.buying_power.toLocaleString()}</div></div>
-                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Day P&L</div><div className={`text-sm font-bold mono ${alpacaAccount.day_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{alpacaAccount.day_pnl >= 0 ? '+' : ''}${alpacaAccount.day_pnl.toLocaleString()}</div></div>
-                  <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Cash</div><div className="text-sm font-bold mono text-slate-200">${alpacaAccount.cash.toLocaleString()}</div></div>
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Equity</div><div className="text-sm font-bold mono text-slate-200">${simAccount.equity.toLocaleString()}</div></div>
+                <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Buying Power</div><div className="text-sm font-bold mono text-slate-200">${simAccount.buying_power.toLocaleString()}</div></div>
+                <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Day P&L</div><div className={`text-sm font-bold mono ${simAccount.day_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{simAccount.day_pnl >= 0 ? '+' : ''}${simAccount.day_pnl.toLocaleString()}</div></div>
+                <div className="bg-slate-700/50 rounded p-1.5"><div className="text-xs text-slate-500">Cash</div><div className="text-sm font-bold mono text-slate-200">${simAccount.cash.toLocaleString()}</div></div>
+              </div>
               {composite && ticker && composite.signal_label !== 'NEUTRAL' && (
                 <button onClick={prepareTradePreview} disabled={tradeExecuting}
                   className={`w-full px-3 py-2 rounded font-bold text-sm flex items-center justify-center gap-2 transition-all ${
@@ -997,9 +979,8 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
                   </div>
                 </div>
               )}
-              <button onClick={refreshTrading} className="text-xs text-cyan-400 hover:text-cyan-300 underline">Refresh</button>
+              <button onClick={() => { setSimAccount({ equity: 100000, cash: 100000, buying_power: 75000, day_pnl: 0 }); setPositions([]); setOrders([]); setTradeResult(null); addLog('Paper trading reset to $100,000.'); }} className="text-xs text-cyan-400 hover:text-cyan-300 underline">Reset</button>
             </div>
-          )}
         </div>
 
         {/* Signal Validation — current analysis only */}
@@ -1173,7 +1154,7 @@ function SignalAnalysisPage({ signalState, setSignalState, navigateTo }) {
 
 // ===================== PAGE 2: REPLAY SIMULATOR =====================
 
-function ReplaySimulatorPage({ signalState, setSignalState }) {
+function ReplaySimulatorPage({ signalState, setSignalState, simAccount, setSimAccount }) {
   // Trade setup inputs
   const [replayTicker, setReplayTicker] = useState('');
   const [entryDate, setEntryDate] = useState('');
@@ -1513,6 +1494,23 @@ function ReplaySimulatorPage({ signalState, setSignalState }) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [playing]);
 
+  // Sync P&L to simulated account when trade finishes
+  const pnlAppliedRef = useRef(false);
+  useEffect(() => {
+    if ((status === 'STOPPED_OUT' || status === 'TARGET_HIT' || status === 'EXPIRED') && !pnlAppliedRef.current) {
+      pnlAppliedRef.current = true;
+      setSimAccount(prev => ({
+        equity: +(prev.equity + pnl).toFixed(2),
+        cash: +(prev.cash + pnl).toFixed(2),
+        buying_power: +(prev.buying_power + pnl * 2).toFixed(2),
+        day_pnl: +(prev.day_pnl + pnl).toFixed(2),
+      }));
+    }
+    if (status === 'IDLE' || status === 'OPEN') {
+      pnlAppliedRef.current = false;
+    }
+  }, [status, pnl, setSimAccount]);
+
   // Reset replay
   const resetReplay = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -1851,6 +1849,7 @@ function ReplaySimulatorPage({ signalState, setSignalState }) {
 function App() {
   const [activePage, setActivePage] = useState(window.location.pathname === '/simulator' ? 'replay' : 'analysis');
   const [signalState, setSignalState] = useState(null);
+  const [simAccount, setSimAccount] = useState({ equity: 100000, cash: 100000, buying_power: 75000, day_pnl: 0 });
 
   // Handle browser back/forward
   useEffect(() => {
@@ -1897,10 +1896,10 @@ function App() {
       {/* Page Content */}
       {/* Analysis page stays mounted (hidden via CSS) to preserve state */}
       <div style={{ display: activePage === 'analysis' ? 'contents' : 'none' }}>
-        <SignalAnalysisPage signalState={signalState} setSignalState={setSignalState} navigateTo={navigateTo} />
+        <SignalAnalysisPage signalState={signalState} setSignalState={setSignalState} navigateTo={navigateTo} simAccount={simAccount} setSimAccount={setSimAccount} />
       </div>
       {/* Replay page mounts fresh each time (chart needs visible container) */}
-      {activePage === 'replay' && <ReplaySimulatorPage signalState={signalState} setSignalState={setSignalState} />}
+      {activePage === 'replay' && <ReplaySimulatorPage signalState={signalState} setSignalState={setSignalState} simAccount={simAccount} setSimAccount={setSimAccount} />}
     </div>
   );
 }
