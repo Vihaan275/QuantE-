@@ -17,7 +17,8 @@ class TranscriptFetcher:
     def __init__(self):
         self.api_key = os.getenv("AV_API_KEY", "")
         if not self.api_key or self.api_key == "your_key_here":
-            logger.warning("AV_API_KEY not set or is placeholder. Transcript fetching will fail.")
+            logger.warning("No AV_API_KEY set. Transcript fetching will fail.")
+            self.api_key = ""
 
     def _cache_path(self, ticker: str, quarter: str) -> Path:
         return CACHE_DIR / f"{ticker}_{quarter}.json"
@@ -43,10 +44,8 @@ class TranscriptFetcher:
 
         if "Error Message" in data:
             raise ValueError(f"Alpha Vantage error for {ticker} {quarter}: {data['Error Message']}")
-        if "Note" in data:
-            raise ValueError(f"API rate limit hit: {data['Note']}")
-        if "Information" in data:
-            raise ValueError(f"API info: {data['Information']}")
+        if "Note" in data or "Information" in data:
+            raise ValueError(f"API rate limited: {data.get('Note') or data.get('Information')}")
 
         # Extract transcript text from response
         transcript_text = ""

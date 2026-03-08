@@ -48,7 +48,7 @@ def _fetch_raw_earnings(ticker: str) -> dict | None:
 
     api_key = os.getenv("AV_API_KEY", "")
     if not api_key or api_key == "your_key_here":
-        logger.error("AV_API_KEY not set or is placeholder. Cannot fetch earnings.")
+        logger.error("No AV_API_KEY set. Cannot fetch earnings.")
         return None
 
     logger.info(f"Fetching earnings for {ticker} from Alpha Vantage")
@@ -57,7 +57,6 @@ def _fetch_raw_earnings(ticker: str) -> dict | None:
         "symbol": ticker,
         "apikey": api_key,
     }
-
     try:
         resp = requests.get(BASE_URL, params=params, timeout=30)
         resp.raise_for_status()
@@ -69,11 +68,8 @@ def _fetch_raw_earnings(ticker: str) -> dict | None:
     if "Error Message" in data:
         logger.error(f"Alpha Vantage error for {ticker}: {data['Error Message']}")
         return None
-    if "Note" in data:
-        logger.error(f"API rate limit hit: {data['Note']}")
-        return None
-    if "Information" in data:
-        logger.error(f"API info: {data['Information']}")
+    if "Note" in data or "Information" in data:
+        logger.error(f"API rate limited for {ticker} earnings: {data.get('Note') or data.get('Information')}")
         return None
 
     if "quarterlyEarnings" not in data:
