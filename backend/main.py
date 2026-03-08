@@ -288,23 +288,31 @@ async def analyze(req: AnalyzeRequest):
             else:
                 label = "NEUTRAL"
 
-            expected = 200
+            # Confidence: blend of signal strength, factor agreement, data coverage
+            strength = min(abs(composite) / 0.6, 1.0)
+            scores = [guidance["score"], pressure["score"], momentum["score"]]
+            sign = 1 if composite >= 0 else -1
+            agreeing = sum(1 for s in scores if s * sign > 0)
+            agreement = agreeing / len(scores)
             analyzed = [
                 guidance.get("sentences_analyzed", 0),
                 pressure.get("sentences_analyzed", 0),
                 momentum.get("sentences_analyzed", 0),
             ]
-            confidence = round(min(1.0, (sum(analyzed) / len(analyzed)) / expected), 2)
+            avg_analyzed = sum(analyzed) / len(analyzed) if analyzed else 0
+            coverage = min(avg_analyzed / 300, 1.0)
+            raw_confidence = 0.40 * strength + 0.35 * agreement + 0.25 * coverage
+            confidence = round(max(0.10, min(0.85, raw_confidence)), 2)
 
             # EPS surprise modifies confidence, not composite
             eps_modifier = 0.0
             if earnings["available"]:
                 eps_score = earnings["score"]
                 if (composite > 0 and eps_score > 0) or (composite < 0 and eps_score < 0):
-                    eps_modifier = min(0.15, abs(eps_score) * 0.15)
+                    eps_modifier = min(0.10, abs(eps_score) * 0.10)
                 elif (composite > 0 and eps_score < -0.2) or (composite < 0 and eps_score > 0.2):
                     eps_modifier = -min(0.15, abs(eps_score) * 0.15)
-                confidence = round(max(0.1, min(1.0, confidence + eps_modifier)), 2)
+                confidence = round(max(0.10, min(0.85, confidence + eps_modifier)), 2)
 
             # Calibration context
             abs_comp = abs(composite)
