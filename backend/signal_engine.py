@@ -702,27 +702,40 @@ def compute_signal(parsed: dict, all_cached_texts: list[str] = None, earnings_su
     else:
         label = "NEUTRAL"
 
-    # Confidence based on data richness
-    expected = 200
+    # Confidence: blend of signal strength, factor agreement, and data coverage
+    # 1) Signal strength — stronger composite = more confident, but diminishing returns
+    strength = min(abs(composite) / 0.6, 1.0)  # maxes out at |0.6|
+
+    # 2) Factor agreement — do sub-scores agree on direction?
+    scores = [guidance["score"], pressure["score"], momentum["score"]]
+    sign = 1 if composite >= 0 else -1
+    agreeing = sum(1 for s in scores if s * sign > 0)
+    agreement = agreeing / len(scores)  # 0.33, 0.67, or 1.0
+
+    # 3) Data coverage — enough sentences analyzed? (diminishing returns)
     analyzed_counts = [
         guidance["sentences_analyzed"],
         pressure["sentences_analyzed"],
         momentum["sentences_analyzed"],
     ]
     avg_analyzed = sum(analyzed_counts) / len(analyzed_counts) if analyzed_counts else 0
-    confidence = round(min(1.0, avg_analyzed / expected), 2)
+    coverage = min(avg_analyzed / 300, 1.0)  # saturates at 300 sentences
 
-    # EPS surprise acts as confidence modifier, not composite weight
+    # Weighted blend, hard cap at 85% — no system should claim near-certainty
+    raw_confidence = 0.40 * strength + 0.35 * agreement + 0.25 * coverage
+    confidence = round(max(0.10, min(0.85, raw_confidence)), 2)
+
+    # EPS surprise acts as confidence modifier
     eps_modifier = 0.0
     if earnings["available"]:
         eps_score = earnings["score"]
         # EPS confirms signal direction → boost confidence
         # EPS contradicts signal direction → reduce confidence
         if (composite > 0 and eps_score > 0) or (composite < 0 and eps_score < 0):
-            eps_modifier = min(0.15, abs(eps_score) * 0.15)  # up to +15%
+            eps_modifier = min(0.10, abs(eps_score) * 0.10)  # up to +10%
         elif (composite > 0 and eps_score < -0.2) or (composite < 0 and eps_score > 0.2):
             eps_modifier = -min(0.15, abs(eps_score) * 0.15)  # up to -15%
-        confidence = round(max(0.1, min(1.0, confidence + eps_modifier)), 2)
+        confidence = round(max(0.10, min(0.85, confidence + eps_modifier)), 2)
 
     # One-line summary
     sub_summaries = []
