@@ -314,16 +314,16 @@ async def analyze(req: AnalyzeRequest):
                     eps_modifier = -min(0.15, abs(eps_score) * 0.15)
                 confidence = round(max(0.10, min(0.85, confidence + eps_modifier)), 2)
 
-            # Calibration context
+            # Calibration context (no hardcoded accuracy — only live backtest data is trustworthy)
             abs_comp = abs(composite)
             if abs_comp >= 0.5:
-                cal = {"bucket": "strong", "expected_move": "5-15%", "historical_accuracy": "70-80%"}
+                cal = {"bucket": "strong"}
             elif abs_comp >= 0.3:
-                cal = {"bucket": "moderate", "expected_move": "2-8%", "historical_accuracy": "60-70%"}
+                cal = {"bucket": "moderate"}
             elif abs_comp >= 0.2:
-                cal = {"bucket": "weak", "expected_move": "1-4%", "historical_accuracy": "55-60%"}
+                cal = {"bucket": "weak"}
             else:
-                cal = {"bucket": "neutral", "expected_move": "0-2%", "historical_accuracy": "~50%"}
+                cal = {"bucket": "neutral"}
 
             # Build summary
             parts = []
@@ -445,9 +445,6 @@ def backtest(req: BacktestRequest):
             "signal": signal_result["composite_signal"],
             "actual_5d_pct": sample["known_outcome_5d_pct"],
             "signal_label": signal_result["signal_label"],
-            "sub_scores": {
-                k: v["score"] for k, v in signal_result["sub_scores"].items()
-            },
             "naive_signal": naive_result["composite_signal"],
             "decay_returns": decay_returns,
         })

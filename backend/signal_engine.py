@@ -809,29 +809,19 @@ def compute_signal(parsed: dict, all_cached_texts: list[str] = None, earnings_su
             "reported_date": earnings.get("reported_date", ""),
         }
 
-    # Calibration context — what does this signal strength historically mean?
+    # Calibration context — signal strength bucket (no hardcoded accuracy claims)
     abs_comp = abs(composite)
     if abs_comp >= 0.5:
         cal_bucket = "strong"
-        cal_range = "5-15%"
-        cal_accuracy = "70-80%"
     elif abs_comp >= 0.3:
         cal_bucket = "moderate"
-        cal_range = "2-8%"
-        cal_accuracy = "60-70%"
     elif abs_comp >= 0.2:
         cal_bucket = "weak"
-        cal_range = "1-4%"
-        cal_accuracy = "55-60%"
     else:
         cal_bucket = "neutral"
-        cal_range = "0-2%"
-        cal_accuracy = "50%"
 
     calibration = {
         "bucket": cal_bucket,
-        "expected_move": cal_range,
-        "historical_accuracy": cal_accuracy,
         "suggested_window": "5-10 trading days",
         "eps_modifier": round(eps_modifier, 3) if earnings["available"] else None,
     }
